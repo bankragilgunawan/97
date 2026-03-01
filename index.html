@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>SicBo Pro Analyzer</title>
 <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b0e14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <style>
         :root {
             --bg: #0b0e14; --surface: #151921; --green: #089981; --red: #f23645;
@@ -388,10 +391,15 @@
     function clearData() { if (confirm("Reset seluruh data sesi?")) { localStorage.removeItem('sicbo_pro_vfinal'); location.reload(); } }
     
     window.onload = loadData;
-</script>
-    <script>
+
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('service-worker.js');
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('service-worker.js').then(function(reg) {
+        console.log('ServiceWorker registration successful');
+      }, function(err) {
+        console.log('ServiceWorker registration failed: ', err);
+      });
+    });
   }
 </script>
 </body>
