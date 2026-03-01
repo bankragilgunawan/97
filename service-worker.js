@@ -1,3 +1,7 @@
+self.addEventListener('install', function(event) {
+  console.log('Service Worker installed.');
+});
+
 self.addEventListener('fetch', function(event) {
-  // Kode kosong ini sudah cukup untuk memicu tombol instal
+  // Biarkan kosong untuk fungsionalitas dasar PWA
 });
