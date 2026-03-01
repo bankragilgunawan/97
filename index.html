@@ -276,70 +276,78 @@
         }
     }
 
-                            function submitDice() {
-        const d = inputs.map(i => parseInt(i.value));
-        if (d.some(isNaN)) return;
-        const total = d[0] + d[1] + d[2];
-        let result = (total >= 11) ? 'BIG' : 'SMALL';
+            function submitDice() {
+    const d = inputs.map(i => parseInt(i.value));
+    if (d.some(isNaN)) return;
+    const total = d[0] + d[1] + d[2];
+    let result = (total >= 11) ? 'BIG' : 'SMALL';
 
-        // 1. CATAT KE HISTORI (Gunakan status sinyal SAAT INI)
-        if (currentSignal !== '') {
-            const isWait = (currentSignal === 'WAIT');
-            const win = isWait ? false : (result === currentSignal);
-            
-            allHistory.unshift({
-                time: new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}),
-                dice: d.join(','), total, sig: currentSignal, win, 
-                betAmount: isWait ? 0 : currentBet, 
-                stepState: step1326
-            });
-
-            if (!isWait) {
-                if (win) totalNet += (currentBet * 0.97); 
-                else totalNet -= currentBet;
-                // Jalankan hitungan bet berikutnya
-                calculateNextBet(win);
-            }
-        }
-
-        chartData.push({ close: total });
+    // 1. Catat histori dengan status sinyal saat ini
+    if (currentSignal !== '') {
+        const isWait = (currentSignal === 'WAIT');
+        const win = isWait ? false : (result === currentSignal);
         
-        // 2. TENTUKAN SINYAL BERIKUTNYA
-        if (chartData.length >= 5) {
-            const getMA = (p) => {
-                let sum = 0; let len = chartData.length;
-                for(let i = len-1; i > len-1-p; i--) sum += chartData[i].close;
-                return sum / p;
-            };
-            const ma3 = getMA(3), ma5 = getMA(5);
-            const last2 = chartData.slice(-2).map(v => v.close >= 11 ? 'BIG' : 'SMALL');
-            
-            let potentialSig = (last2[0] === last2[1]) ? last2[0] : (ma3 > ma5 ? 'BIG' : 'SMALL');
+        allHistory.unshift({
+            time: new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}),
+            dice: d.join(','), total, sig: currentSignal, win, 
+            betAmount: isWait ? 0 : currentBet, 
+            stepState: step1326
+        });
 
-            // Cek kondisi Loss 3x
-            const realBets = allHistory.filter(h => h.sig !== 'WAIT').slice(0, 3);
-            const isTripleLoss = (realBets.length === 3 && realBets.every(h => h.win === false));
-            
-            // Hitung berapa kali sudah WAIT berturut-turut
-            let consecutiveWait = 0;
-            for (let h of allHistory) {
-                if (h.sig === 'WAIT') consecutiveWait++;
-                else break; 
-            }
+        if (!isWait) {
+            if (win) totalNet += (currentBet * 0.97); 
+            else totalNet -= currentBet;
+            calculateNextBet(win);
+        }
+    }
 
-            // Aturan penentuan status sinyal
-            if (isTripleLoss && consecutiveWait < 2) {
-                currentSignal = 'WAIT';
-            } else {
-                currentSignal = potentialSig;
-            }
+    chartData.push({ close: total });
+    
+    // 2. Logika Sinyal Premium (Filter Ketat)
+    if (chartData.length >= 6) {
+        const last6 = chartData.slice(-6).map(v => v.close >= 11 ? 'B' : 'S');
+        
+        // Deteksi Pola Pingpong (B-S-B-S) yang sering bikin loss beruntun
+        const isPingPong = (last6[0] !== last6[1] && last6[1] !== last6[2] && last6[2] !== last6[3]);
+
+        const getMA = (p) => {
+            let sum = 0; let len = chartData.length;
+            for(let i = len-1; i > len-1-p; i--) sum += chartData[i].close;
+            return sum / p;
+        };
+        const ma3 = getMA(3), ma5 = getMA(5);
+        
+        // Tentukan arah tren dasar
+        let potentialSig = (ma3 > ma5) ? 'BIG' : 'SMALL';
+
+        // Hitung kekalahan beruntun asli (bukan WAIT)
+        const realBets = allHistory.filter(h => h.sig !== 'WAIT').slice(0, 3);
+        const isTripleLoss = (realBets.length === 3 && realBets.every(h => h.win === false));
+        
+        // Hitung durasi WAIT yang sudah berjalan
+        let consecutiveWait = 0;
+        for (let h of allHistory) {
+            if (h.sig === 'WAIT') consecutiveWait++;
+            else break; 
         }
 
-        inputs.forEach(i => i.value = ''); 
-        inputs[0].focus();
-        saveData(); 
-        updateUI();
+        // PENENTUAN SINYAL AKHIR
+        if (isPingPong) {
+            currentSignal = 'WAIT'; // Amankan modal jika pola tidak stabil
+        } else if (isTripleLoss && consecutiveWait < 3) {
+            currentSignal = 'WAIT'; // Paksa tunggu 3 putaran setelah loss 3x
+        } else if (Math.abs(ma3 - ma5) < 0.3) {
+            currentSignal = 'WAIT'; // Tren terlalu datar, sangat berisiko
+        } else {
+            currentSignal = potentialSig;
+        }
     }
+
+    inputs.forEach(i => i.value = ''); 
+    inputs[0].focus();
+    saveData(); 
+    updateUI();
+}
 
     function updateUI() {
         document.getElementById('netTotal').textContent = (totalNet >= 0 ? '+' : '') + new Intl.NumberFormat('id-ID').format(Math.floor(totalNet));
@@ -381,33 +389,47 @@
             else speak("Sinyal berikutnya " + currentSignal);
         }
 
-        const checkContainer = document.getElementById('check-items');
+                const checkContainer = document.getElementById('check-items');
         let checks = [];
-        if (currentSignal && currentSignal !== 'WAIT') {
-            const isGas = (signalStrength === "STRONG" && !isSideways);
-            checks.push(`<div style="display:flex; justify-content:space-between;"><span>${signalStrength === "STRONG" ? "🟢" : "🟡"} Tren</span> <b>${signalStrength}</b></div>`);
-            checks.push(`<div style="display:flex; justify-content:space-between;"><span>${isSideways ? "🔴" : "🟢"} Pasar</span> <b>${isSideways ? 'Sideways' : 'Stabil'}</b></div>`);
-            checks.push(`<div style="margin-top:5px; padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; text-align:center; border:1px solid ${isGas ? 'var(--green)' : 'var(--orange)'}; color:${isGas ? 'var(--green)' : 'var(--orange)'}; font-weight:bold;">KESIMPULAN: ${isGas ? 'GAS EKSEKUSI' : 'WAIT / MINIMAL'}</div>`);
-        } else if (currentSignal === 'WAIT') {
-            checks.push("<div style='text-align:center; color:var(--orange); font-weight:bold; padding:10px;'>KESIMPULAN: JANGAN PASANG (WAIT)</div>");
+        
+        // Deteksi Pola untuk UI
+        const last6 = chartData.slice(-6).map(v => v.close >= 11 ? 'B' : 'S');
+        const isPingPong = last6.length >= 4 && (last6[0] !== last6[1] && last6[1] !== last6[2] && last6[2] !== last6[3]);
+
+        if (currentSignal === 'WAIT') {
+            // Tampilan Khusus saat WAIT agar user tidak nekat pasang
+            let alasan = isPingPong ? "⚠️ POLA PINGPONG TERDETEKSI" : "🔍 MENCARI MOMENTUM AMAN";
+            checks.push(`<div style='text-align:center; color:var(--orange); font-weight:bold; padding:15px; border:1px dashed var(--orange); border-radius:12px; background:rgba(255,152,0,0.05);'>
+                <span style="font-size:0.9rem;">KESIMPULAN: JANGAN PASANG</span><br>
+                <span style="font-size:0.7rem; opacity:0.8; font-weight:normal;">${alasan}</span>
+            </div>`);
+        } else if (currentSignal) {
+            // Tampilan saat ada Sinyal (Gas)
+            const isGas = (signalStrength === "STRONG" && !isSideways && !isPingPong);
+            checks.push(`<div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>${isPingPong ? "🟡" : "🟢"} Tren</span> <b>${isPingPong ? 'VOLATIL' : 'STABIL'}</b></div>`);
+            checks.push(`<div style="margin-top:5px; padding:12px; background:${isGas ? 'rgba(8,153,129,0.1)' : 'rgba(255,152,0,0.1)'}; border-radius:10px; text-align:center; border:1px solid ${isGas ? 'var(--green)' : 'var(--orange)'}; color:${isGas ? 'var(--green)' : 'var(--orange)'}; font-weight:bold;">
+                KESIMPULAN: ${isGas ? '🚀 GAS EKSEKUSI' : '⚠️ BET MINIMAL / WAIT'}
+            </div>`);
         }
         checkContainer.innerHTML = checks.join('');
 
+        // Tampilan Histori dengan penekanan pada status OBSERVE (WAIT)
         document.getElementById('historyList').innerHTML = allHistory.slice(0, 50).map(h => `
-    <div class="log-item" style="background: ${h.sig === 'WAIT' ? 'rgba(255,152,0,0.05)' : 'transparent'}; border-left: 4px solid ${h.sig === 'WAIT' ? 'var(--orange)' : (h.win ? 'var(--green)' : 'var(--red)')}; margin-bottom: 5px; padding: 10px;">
-        <div style="display:flex; flex-direction:column;">
-            <span style="font-weight:bold;">[${h.dice}] → ${h.total >= 11 ? 'B' : 'S'}</span>
-            <small style="opacity:0.6;">${h.time} | Bet: ${h.betAmount.toLocaleString()}</small>
-        </div>
-        <div style="text-align:right;">
-            <div style="font-weight:bold; color:${h.sig === 'WAIT' ? 'var(--orange)' : (h.win ? 'var(--green)' : 'var(--red)')}">
-                ${h.sig === 'WAIT' ? 'OBSERVE' : (h.win ? 'WIN' : 'LOSS')}
+            <div class="log-item" style="background: ${h.sig === 'WAIT' ? 'rgba(255,152,0,0.08)' : 'transparent'}; border-left: 4px solid ${h.sig === 'WAIT' ? 'var(--orange)' : (h.win ? 'var(--green)' : 'var(--red)')}; margin-bottom: 8px; padding: 12px; border-radius: 8px;">
+                <div style="display:flex; flex-direction:column;">
+                    <span style="font-weight:bold; letter-spacing:1px;">[${h.dice}] → ${h.total >= 11 ? 'BIG' : 'SMALL'}</span>
+                    <small style="opacity:0.5; font-size:0.7rem;">${h.time} | Bet: ${h.betAmount.toLocaleString()}</small>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-weight:bold; font-size:0.9rem; color:${h.sig === 'WAIT' ? 'var(--orange)' : (h.win ? 'var(--green)' : 'var(--red)')}">
+                        ${h.sig === 'WAIT' ? 'OBSERVE' : (h.win ? 'WIN' : 'LOSS')}
+                    </div>
+                    <small style="opacity:0.6; font-size:0.7rem;">Sinyal: ${h.sig}</small>
+                </div>
             </div>
-            <small style="opacity:0.6;">Sig: ${h.sig}</small>
-        </div>
-    </div>
-`).join('');
+        `).join('');
 }
+    
         function undoLast() {
         if (allHistory.length === 0) return;
         
