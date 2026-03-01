@@ -457,16 +457,6 @@
     
     window.onload = loadData;
 
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-      navigator.serviceWorker.register('service-worker.js').then(function(reg) {
-        console.log('ServiceWorker registration successful');
-      }, function(err) {
-        console.log('ServiceWorker registration failed: ', err);
-      });
-    });
-  }
-
     // 1. Cek status saat aplikasi pertama kali dibuka
 window.addEventListener("DOMContentLoaded", () => {
     const isPremium = localStorage.getItem("statusPremium");
@@ -490,6 +480,15 @@ function checkPass() {
     }
 }
 
+    if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('service-worker.js').then(function(reg) {
+        console.log('ServiceWorker registration successful');
+      }, function(err) {
+        console.log('ServiceWorker registration failed: ', err);
+      });
+    });
+    }
 </script>
 </body>
 </html>
