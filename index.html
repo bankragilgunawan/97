@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sic Bo Analyzer Pro Final</title>
+    <style>
+        :root {
+            --bg: #0b0e14; --surface: #151921; --green: #089981; --red: #f23645;
+            --purple: #9d4edd; --blue: #2962ff; --orange: #ff9800; --text: #d1d4dc; --border: #2a2e39;
+        }
+        * { box-sizing: border-box; font-family: 'Trebuchet MS', sans-serif; }
+        body { margin: 0; background: var(--bg); color: var(--text); overflow-x: hidden; padding-bottom: 30px; }
+        .app-container { display: flex; flex-direction: column; max-width: 500px; margin: 0 auto; padding: 15px; gap: 12px; min-height: 100vh; }
+        
+        .stats-header { display: flex; justify-content: space-between; align-items: center; background: var(--surface); padding: 15px; border-radius: 12px; border: 1px solid var(--border); }
+        #netTotal { font-size: 1.8rem; font-weight: bold; margin: 0; }
+        .profit { color: var(--green); }
+        .loss { color: var(--red); }
+
+        .card { background: var(--surface); padding: 15px; border-radius: 12px; border: 1px solid var(--border); }
+        
+        #current-signal { 
+            padding: 20px; border-radius: 15px; text-align: center; font-weight: 800; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); transition: all 0.3s ease;
+        }
+        .sig-big { background: linear-gradient(135deg, #089981 0%, #056656 100%); color: white; border: 1px solid #0bd4b3; }
+        .sig-small { background: linear-gradient(135deg, #f23645 0%, #b2202b 100%); color: white; border: 1px solid #ff5a67; }
+        .sig-wait { background: #2a2e39; color: #787b86; }
+
+        .dice-input-section { background: var(--surface); padding: 15px; border-radius: 12px; border: 1px solid var(--border); text-align: center; }
+        .dice-inputs { display: flex; justify-content: center; gap: 10px; margin: 10px 0; }
+        .dice-inputs input { width: 50px; height: 50px; text-align: center; font-size: 1.5rem; font-weight: bold; background: #1e222d; border: 2px solid var(--border); color: white; border-radius: 8px; }
+        
+        .log-container { background: var(--surface); border-radius: 12px; padding: 15px; border: 1px solid var(--border); }
+        #historyList { height: 250px; overflow-y: auto; font-size: 0.85rem; margin-top: 10px; }
+        .log-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #2a2e39; align-items: center; }
+        
+        .val-small { font-size: 0.7rem; color: #787b86; text-transform: uppercase; letter-spacing: 1px; }
+        .btn-clear { background: none; border: 1px solid var(--red); color: var(--red); padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.7rem; }
+        .btn-undo { background: none; border: 1px solid var(--orange); color: var(--orange); padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.7rem; margin-right: 5px; }
+        
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: #1e222d; padding: 25px; border-radius: 15px; width: 90%; max-width: 380px; border: 1px solid var(--border); }
+        select, input[type="number"] { width: 100%; padding: 12px; margin: 8px 0 15px; background: #131722; border: 1px solid #363a45; color: white; border-radius: 8px; }
+        
+        .blink { animation: blinker 1.2s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.1; } }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="stats-header">
+        <div>
+            <div class="val-small">NET PROFIT (IDR)</div>
+            <h2 id="netTotal">0</h2>
+        </div>
+        <button onclick="openSettings()" style="background:none; border:1px solid #363a45; color:#787b86; padding:8px 12px; border-radius:6px; cursor:pointer;">⚙️ SETUP</button>
+    </div>
+
+    <div class="card" style="background: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
+            <div class="val-small">STATISTIK SESI</div>
+            <div style="display: flex; gap: 20px;">
+                <div style="text-align: right;">
+                    <span style="font-size: 0.6rem; color: var(--green); display: block;">WIN</span>
+                    <span id="totalWin" style="font-size: 1.2rem; font-weight: bold; color: var(--green);">0</span>
+                </div>
+                <div style="text-align: right;">
+                    <span style="font-size: 0.6rem; color: var(--red); display: block;">LOSS</span>
+                    <span id="totalLoss" style="font-size: 1.2rem; font-weight: bold; color: var(--red);">0</span>
+                </div>
+            </div>
+        </div>
+        <div id="check-items" style="font-size: 0.8rem; display: flex; flex-direction: column; gap: 8px;">
+            <div style='text-align:center; opacity:0.5;'>Menunggu minimal 3 data dadu...</div>
+        </div>
+    </div>
+
+    <div id="current-signal" class="sig-wait">MASUKKAN DATA AWAL</div>
+
+    <div class="dice-input-section">
+        <div class="dice-inputs">
+            <input type="number" id="d1" min="1" max="6" placeholder="?">
+            <input type="number" id="d2" min="1" max="6" placeholder="?">
+            <input type="number" id="d3" min="1" max="6" placeholder="?">
+        </div>
+        <div id="stratLabel" class="val-small" style="color: var(--purple); font-weight:bold;">STRATEGY: Martingale</div>
+    </div>
+
+    <div class="log-container">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="val-small">HISTORI TRANSAKSI</div>
+            <div>
+                <button class="btn-undo" onclick="undoLast()">UNDO</button>
+                <button class="btn-clear" onclick="clearData()">CLEAR</button>
+            </div>
+        </div>
+        <div id="historyList"></div>
+    </div>
+</div>
+
+<div id="settingsModal" class="modal">
+    <div class="modal-content">
+        <h3 style="color:white; margin-top:0;">Konfigurasi Bet</h3>
+        <label class="val-small">BASE BET (Taruhan Awal)</label>
+        <input type="number" id="baseBetInput" placeholder="Contoh: 10000">
+        <label class="val-small">STRATEGI MANAJEMEN MODAL</label>
+        <select id="strategySelect">
+            <option value="martingale">Martingale (2.04x Lose)</option>
+            <option value="parlay">Parlay (x2 Win)</option>
+            <option value="1326">System 1-3-2-6</option>
+            <option value="dalembert">D'Alembert (+/- 1)</option>
+        </select>
+        <button onclick="saveSettings()" style="width:100%; padding:12px; background:var(--purple); color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; margin-top:10px;">SIMPAN PERUBAHAN</button>
+        <button onclick="closeSettings()" style="background:none; border:none; color:#5d606b; width:100%; margin-top:10px; cursor:pointer;">Batal</button>
+    </div>
+</div>
+
+<script>
+    let baseBet = 10000, currentBet = 10000;
+    let totalNet = 0;
+    let currentSignal = '', allHistory = [], chartData = [];
+    let strategy = 'martingale', step1326 = 0;
+
+    const inputs = [document.getElementById('d1'), document.getElementById('d2'), document.getElementById('d3')];
+
+    // Fungsi Suara yang lebih stabil
+    function speak(text) {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel(); // Hentikan suara sebelumnya
+            const msg = new SpeechSynthesisUtterance(text);
+            msg.lang = 'id-ID';
+            msg.rate = 1.0;
+            msg.pitch = 1.0;
+            window.speechSynthesis.speak(msg);
+        }
+    }
+
+    function saveData() {
+        const data = { baseBet, currentBet, totalNet, allHistory, chartData, currentSignal, strategy, step1326 };
+        localStorage.setItem('sicbo_pro_vfinal', JSON.stringify(data));
+    }
+
+    function recalculateNetProfit() {
+        totalNet = 0;
+        allHistory.forEach(h => {
+            if (h.sig !== 'WAIT') {
+                if (h.win) totalNet += (h.betAmount * 0.97);
+                else totalNet -= h.betAmount;
+            }
+        });
+    }
+
+    function loadData() {
+        const saved = localStorage.getItem('sicbo_pro_vfinal');
+        if (saved) {
+            const p = JSON.parse(saved);
+            baseBet = p.baseBet || 10000; 
+            currentBet = p.currentBet || 10000;
+            allHistory = p.allHistory || []; 
+            chartData = p.chartData || []; 
+            currentSignal = p.currentSignal || ''; 
+            strategy = p.strategy || 'martingale';
+            step1326 = p.step1326 || 0;
+            recalculateNetProfit();
+            updateUI();
+        }
+    }
+
+    inputs.forEach((input, index) => {
+        input.addEventListener('input', (e) => {
+            if (e.target.value.length >= 1) {
+                if (index < 2) inputs[index + 1].focus();
+                else submitDice();
+            }
+        });
+    });
+
+        function calculateNextBet(isWin) {
+        const p1326 = [1, 3, 2, 6];
+        // Jika sedang dalam status WAIT, jangan ubah currentBet, biarkan tetap di angka terakhir
+        if (currentSignal === 'WAIT') return; 
+
+        switch (strategy) {
+            case 'martingale':
+                // Reset ke awal HANYA jika benar-benar WIN
+                if (isWin) {
+                    currentBet = baseBet;
+                } else {
+                    currentBet = Math.ceil((currentBet * 2.04) / 100) * 100;
+                }
+                break;
+                
+            case 'parlay':
+                currentBet = isWin ? Math.floor(currentBet * 1.97) : baseBet;
+                break;
+                
+            case '1326':
+                if (isWin) { step1326++; if (step1326 >= 4) step1326 = 0; } 
+                else { step1326 = 0; }
+                currentBet = baseBet * p1326[step1326];
+                break;
+                
+            case 'dalembert':
+                if (isWin) currentBet = Math.max(baseBet, currentBet - baseBet); 
+                else currentBet += Math.ceil(baseBet * 1.1);
+                break;
+        }
+    }
+
+                            function submitDice() {
+        const d = inputs.map(i => parseInt(i.value));
+        if (d.some(isNaN)) return;
+        const total = d[0] + d[1] + d[2];
+        let result = (total >= 11) ? 'BIG' : 'SMALL';
+
+        // 1. CATAT KE HISTORI (Gunakan status sinyal SAAT INI)
+        if (currentSignal !== '') {
+            const isWait = (currentSignal === 'WAIT');
+            const win = isWait ? false : (result === currentSignal);
+            
+            allHistory.unshift({
+                time: new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}),
+                dice: d.join(','), total, sig: currentSignal, win, 
+                betAmount: isWait ? 0 : currentBet, 
+                stepState: step1326
+            });
+
+            if (!isWait) {
+                if (win) totalNet += (currentBet * 0.97); 
+                else totalNet -= currentBet;
+                // Jalankan hitungan bet berikutnya
+                calculateNextBet(win);
+            }
+        }
+
+        chartData.push({ close: total });
+        
+        // 2. TENTUKAN SINYAL BERIKUTNYA
+        if (chartData.length >= 5) {
+            const getMA = (p) => {
+                let sum = 0; let len = chartData.length;
+                for(let i = len-1; i > len-1-p; i--) sum += chartData[i].close;
+                return sum / p;
+            };
+            const ma3 = getMA(3), ma5 = getMA(5);
+            const last2 = chartData.slice(-2).map(v => v.close >= 11 ? 'BIG' : 'SMALL');
+            
+            let potentialSig = (last2[0] === last2[1]) ? last2[0] : (ma3 > ma5 ? 'BIG' : 'SMALL');
+
+            // Cek kondisi Loss 3x
+            const realBets = allHistory.filter(h => h.sig !== 'WAIT').slice(0, 3);
+            const isTripleLoss = (realBets.length === 3 && realBets.every(h => h.win === false));
+            
+            // Hitung berapa kali sudah WAIT berturut-turut
+            let consecutiveWait = 0;
+            for (let h of allHistory) {
+                if (h.sig === 'WAIT') consecutiveWait++;
+                else break; 
+            }
+
+            // Aturan penentuan status sinyal
+            if (isTripleLoss && consecutiveWait < 2) {
+                currentSignal = 'WAIT';
+            } else {
+                currentSignal = potentialSig;
+            }
+        }
+
+        inputs.forEach(i => i.value = ''); 
+        inputs[0].focus();
+        saveData(); 
+        updateUI();
+    }
+
+    function updateUI() {
+        document.getElementById('netTotal').textContent = (totalNet >= 0 ? '+' : '') + new Intl.NumberFormat('id-ID').format(Math.floor(totalNet));
+        document.getElementById('netTotal').className = totalNet >= 0 ? 'profit' : 'loss';
+        
+        const realHistory = allHistory.filter(h => h.sig !== 'WAIT');
+        document.getElementById('totalWin').textContent = realHistory.filter(h => h.win).length;
+        document.getElementById('totalLoss').textContent = realHistory.filter(h => !h.win).length;
+        document.getElementById('stratLabel').textContent = "STRATEGY: " + strategy.toUpperCase();
+
+        let streakCount = 0, lastSide = "", isSideways = false, signalStrength = "LOW";
+        if (allHistory.length >= 1) {
+            lastSide = (allHistory[0].total >= 11) ? 'BIG' : 'SMALL';
+            for (let h of allHistory) { 
+                if ((h.total >= 11 ? 'BIG' : 'SMALL') === lastSide) streakCount++; else break; 
+            }
+            if (allHistory.length >= 4) {
+                const h = allHistory.slice(0, 4).map(item => (item.total >= 11 ? 'B' : 'S'));
+                if (h[0] !== h[1] && h[1] !== h[2] && h[2] !== h[3]) isSideways = true;
+            }
+            if (currentSignal === lastSide) signalStrength = "STRONG";
+        }
+
+        const sigEl = document.getElementById('current-signal');
+        if (currentSignal) {
+            let formattedBet = new Intl.NumberFormat('id-ID').format(Math.ceil(currentBet));
+            sigEl.innerHTML = `
+                <div style="font-size: 0.7rem; opacity: 0.7; letter-spacing: 1px;">REKOMENDASI TRADE</div>
+                <div style="font-size: 2rem; margin: 8px 0; letter-spacing: 3px;">${currentSignal}</div>
+                <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
+                    <span style="font-size: 0.85rem; font-weight:bold;">BET: IDR ${currentSignal === 'WAIT' ? '0' : formattedBet}</span>
+                </div>
+            `;
+            sigEl.className = currentSignal === 'BIG' ? 'sig-big' : (currentSignal === 'SMALL' ? 'sig-small' : 'sig-wait');
+            
+            // Trigger Suara Berdasarkan Sinyal Baru
+            if (currentSignal === 'WAIT') speak("Harap tunggu, pola tidak stabil");
+            else if (streakCount === 2) speak("Pola twin, ikuti " + currentSignal);
+            else speak("Sinyal berikutnya " + currentSignal);
+        }
+
+        const checkContainer = document.getElementById('check-items');
+        let checks = [];
+        if (currentSignal && currentSignal !== 'WAIT') {
+            const isGas = (signalStrength === "STRONG" && !isSideways);
+            checks.push(`<div style="display:flex; justify-content:space-between;"><span>${signalStrength === "STRONG" ? "🟢" : "🟡"} Tren</span> <b>${signalStrength}</b></div>`);
+            checks.push(`<div style="display:flex; justify-content:space-between;"><span>${isSideways ? "🔴" : "🟢"} Pasar</span> <b>${isSideways ? 'Sideways' : 'Stabil'}</b></div>`);
+            checks.push(`<div style="margin-top:5px; padding:10px; background:rgba(255,255,255,0.05); border-radius:8px; text-align:center; border:1px solid ${isGas ? 'var(--green)' : 'var(--orange)'}; color:${isGas ? 'var(--green)' : 'var(--orange)'}; font-weight:bold;">KESIMPULAN: ${isGas ? 'GAS EKSEKUSI' : 'WAIT / MINIMAL'}</div>`);
+        } else if (currentSignal === 'WAIT') {
+            checks.push("<div style='text-align:center; color:var(--orange); font-weight:bold; padding:10px;'>KESIMPULAN: JANGAN PASANG (WAIT)</div>");
+        }
+        checkContainer.innerHTML = checks.join('');
+
+        document.getElementById('historyList').innerHTML = allHistory.slice(0, 50).map(h => `
+    <div class="log-item" style="background: ${h.sig === 'WAIT' ? 'rgba(255,152,0,0.05)' : 'transparent'}; border-left: 4px solid ${h.sig === 'WAIT' ? 'var(--orange)' : (h.win ? 'var(--green)' : 'var(--red)')}; margin-bottom: 5px; padding: 10px;">
+        <div style="display:flex; flex-direction:column;">
+            <span style="font-weight:bold;">[${h.dice}] → ${h.total >= 11 ? 'B' : 'S'}</span>
+            <small style="opacity:0.6;">${h.time} | Bet: ${h.betAmount.toLocaleString()}</small>
+        </div>
+        <div style="text-align:right;">
+            <div style="font-weight:bold; color:${h.sig === 'WAIT' ? 'var(--orange)' : (h.win ? 'var(--green)' : 'var(--red)')}">
+                ${h.sig === 'WAIT' ? 'OBSERVE' : (h.win ? 'WIN' : 'LOSS')}
+            </div>
+            <small style="opacity:0.6;">Sig: ${h.sig}</small>
+        </div>
+    </div>
+`).join('');
+}
+        function undoLast() {
+        if (allHistory.length === 0) return;
+        
+        // 1. Hapus data terakhir yang salah input
+        allHistory.shift();
+        chartData.pop();
+        
+        // 2. Kembalikan nominal Bet ke posisi sebelumnya
+        if (allHistory.length > 0) {
+            const lastData = allHistory[0];
+            // Hitung ulang taruhan berikutnya berdasarkan hasil data terakhir yang ada
+            if (lastData.sig !== 'WAIT') {
+                calculateNextBet(lastData.win);
+            } else {
+                // Jika data terakhir sebelum undo adalah WAIT, tetap gunakan bet terakhir yang valid
+                currentBet = currentBet; 
+            }
+            step1326 = lastData.stepState;
+        } else {
+            // Jika histori kosong setelah undo, balik ke awal
+            currentBet = baseBet;
+            step1326 = 0;
+        }
+        
+        recalculateNetProfit();
+        saveData(); 
+        updateUI();
+    }
+
+    function openSettings() { 
+        document.getElementById('baseBetInput').value = baseBet; 
+        document.getElementById('strategySelect').value = strategy;
+        document.getElementById('settingsModal').classList.add('show'); 
+    }
+    function closeSettings() { document.getElementById('settingsModal').classList.remove('show'); }
+    function saveSettings() { 
+        baseBet = parseInt(document.getElementById('baseBetInput').value) || 10000; 
+        strategy = document.getElementById('strategySelect').value;
+        currentBet = baseBet; step1326 = 0;
+        saveData(); closeSettings(); updateUI(); 
+    }
+    function clearData() { if (confirm("Reset seluruh data sesi?")) { localStorage.removeItem('sicbo_pro_vfinal'); location.reload(); } }
+    
+    window.onload = loadData;
+</script>
+</body>
+</html>
