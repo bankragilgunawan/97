@@ -47,10 +47,78 @@
         select, input[type="number"] { width: 100%; padding: 12px; margin: 8px 0 15px; background: #131722; border: 1px solid #363a45; color: white; border-radius: 8px; }
         
         .blink { animation: blinker 1.2s linear infinite; }
-        @keyframes blinker { 50% { opacity: 0.1; } }
+        @keyframes blinker { 50% { opacity: 0.1; } 
+        
+        /* === KODE LOCK SCREEN PREMIUM (PERBAIKAN) === */
+#lock-screen {
+    position: fixed !important;
+    inset: 0 !important; /* Menutup seluruh layar */
+    background: var(--bg) !important;
+    display: none; /* Akan diubah jadi 'flex' oleh JavaScript jika belum premium */
+    flex-direction: column !important;
+    justify-content: center !important; /* Tengahkan Vertikal */
+    align-items: center !important;     /* Tengahkan Horizontal */
+    z-index: 999999 !important; /* Pastikan di atas semua elemen */
+    padding: 20px;
+    text-align: center;
+}
+
+.lock-card {
+    background: var(--surface);
+    padding: 30px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    width: 100%;
+    max-width: 350px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+}
+
+#app-pass {
+    width: 100%;
+    padding: 15px;
+    background: #1e222d;
+    border: 1px solid var(--border);
+    color: white;
+    border-radius: 10px;
+    font-size: 1.2rem;
+    text-align: center;
+    margin: 20px 0;
+    outline: none;
+}
+
+.btn-activate {
+    width: 100%;
+    padding: 15px;
+    background: var(--green);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-weight: bold;
+    font-size: 1rem;
+    cursor: pointer;
+}
+}
     </style>
 </head>
 <body>
+<body>
+    <div id="lock-screen">
+        <div class="lock-card">
+            <h2 style="color: white; margin-bottom: 10px; font-size: 1.5rem;">PREMIUM ACCESS</h2>
+            <p style="color: #888; margin-bottom: 0px; font-size: 0.9rem;">Masukkan kode aktivasi premium Anda</p>
+            
+            <input type="password" id="app-pass" placeholder="KODE AKTIVASI">
+            
+            <button class="btn-activate" onclick="checkPass()">AKTIVASI SEKARANG</button>
+            
+            <a href="https://wa.me/6282121218466" style="color: var(--green); display: block; margin-top: 20px; font-size: 14px; text-decoration: none;">
+                Beli Lisensi Premium
+            </a>
+        </div>
+    </div>
+
+    <div class="app-container">
+        ...
 
 <div class="app-container">
     <div class="stats-header">
@@ -398,6 +466,30 @@
       });
     });
   }
+
+    // 1. Cek status saat aplikasi pertama kali dibuka
+window.addEventListener("DOMContentLoaded", () => {
+    const isPremium = localStorage.getItem("statusPremium");
+    if (isPremium !== "aktif") {
+        document.getElementById("lock-screen").style.display = "flex";
+    }
+});
+
+// 2. Fungsi untuk verifikasi password
+function checkPass() {
+    const pass = document.getElementById('app-pass').value;
+    const kodeValid = "PREMIUM97"; // <-- GANTI DENGAN KODE JUALANMU
+    
+    if (pass === kodeValid) {
+        // Simpan status ke memori HP user selamanya
+        localStorage.setItem("statusPremium", "aktif");
+        document.getElementById('lock-screen').style.display = 'none';
+        alert("Selamat! Akses Premium Aktif Selamanya.");
+    } else {
+        alert("Kode Salah atau Kadaluarsa!");
+    }
+}
+
 </script>
 </body>
 </html>
