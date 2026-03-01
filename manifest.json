@@ -1,0 +1,9 @@
+{
+  "name": "SicBo Pro Analyzer",
+  "short_name": "SicBo",
+  "start_url": "/97/",
+  "display": "standalone",
+  "background_color": "#0b0e14",
+  "theme_color": "#0b0e14",
+  "orientation": "portrait"
+}
