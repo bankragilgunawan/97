@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SicBo Pro Analyzer</title>
-<link rel="manifest" href="manifest.json" />
-<style>
+    <title>Sic Bo Analyzer Pro</title>
+    <link rel="manifest" href="manifest.json" />
+        <style>
         :root {
             --bg: #0b0e14; --surface: #151921; --green: #089981; --red: #f23645;
             --purple: #9d4edd; --blue: #2962ff; --orange: #ff9800; --text: #d1d4dc; --border: #2a2e39;
@@ -47,9 +47,10 @@
         select, input[type="number"] { width: 100%; padding: 12px; margin: 8px 0 15px; background: #131722; border: 1px solid #363a45; color: white; border-radius: 8px; }
         
         .blink { animation: blinker 1.2s linear infinite; }
-        @keyframes blinker { 50% { opacity: 0.1; } }
-        
-        /* === KODE LOCK SCREEN PREMIUM (PERBAIKAN) === */
+        @keyframes blinker { 50% { opacity: 0.1; } 
+        }        
+
+/* === KODE LOCK SCREEN PREMIUM (PERBAIKAN) === */
 #lock-screen {
     position: fixed !important;
     inset: 0 !important; /* Menutup seluruh layar */
@@ -97,7 +98,7 @@
     font-size: 1rem;
     cursor: pointer;
 }
-}
+
     </style>
 </head>
 <body>
@@ -115,7 +116,7 @@
             </a>
         </div>
     </div>
-</div>
+
 <div class="app-container">
     <div class="stats-header">
         <div>
@@ -169,27 +170,42 @@
 
 <div id="settingsModal" class="modal">
     <div class="modal-content">
-        <h3 style="color:white; margin-top:0;">Konfigurasi Bet</h3>
-        <label class="val-small">BASE BET (Taruhan Awal)</label>
-        <input type="number" id="baseBetInput" placeholder="Contoh: 10000">
-        <label class="val-small">STRATEGI MANAJEMEN MODAL</label>
+        <h3 style="color:white; margin-top:0;">Konfigurasi Bet & Keamanan</h3>
+        
+        <label class="val-small">BASE BET</label>
+        <input type="number" id="baseBetInput">
+        
+        <label class="val-small">TARGET PROFIT (TP)</label>
+        <input type="number" id="tpInput" placeholder="Misal: 500000">
+        
+        <label class="val-small">TRAILING STOP (TS)</label>
+        <input type="number" id="tsInput" placeholder="Jaga profit jika turun (Misal: 100000)">
+
+        <label class="val-small">STRATEGI</label>
         <select id="strategySelect">
-            <option value="martingale">Martingale (2.04x Lose)</option>
-            <option value="parlay">Parlay (x2 Win)</option>
+            <option value="martingale">Martingale</option>
+            <option value="parlay">Parlay</option>
             <option value="1326">System 1-3-2-6</option>
-            <option value="dalembert">D'Alembert (+/- 1)</option>
+            <option value="dalembert">D'Alembert</option>
         </select>
+        
         <button onclick="saveSettings()" style="width:100%; padding:12px; background:var(--purple); color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; margin-top:10px;">SIMPAN PERUBAHAN</button>
         <button onclick="closeSettings()" style="background:none; border:none; color:#5d606b; width:100%; margin-top:10px; cursor:pointer;">Batal</button>
     </div>
 </div>
 
 <script>
-    let baseBet = 10000, currentBet = 10000;
+         let baseBet = 10000;
+    let currentBet = 10000;
     let totalNet = 0;
-    let currentSignal = '', allHistory = [], chartData = [];
-    let strategy = 'martingale', step1326 = 0;
-
+    let maxProfitReached = 0; // Untuk Trailing Stop
+    let targetProfit = 0;     // Untuk Take Profit
+    let trailingStop = 0;     // Untuk Trailing Stop
+    let currentSignal = '';   // INI YANG TADI ERROR (Harus ada di sini)
+    let allHistory = [];
+    let chartData = [];
+    let strategy = 'martingale';
+    let step1326 = 0;    
     const inputs = [document.getElementById('d1'), document.getElementById('d2'), document.getElementById('d3')];
 
     // Fungsi Suara yang lebih stabil
@@ -204,19 +220,13 @@
         }
     }
 
-    function saveData() {
-        const data = { baseBet, currentBet, totalNet, allHistory, chartData, currentSignal, strategy, step1326 };
+        function saveData() {
+        const data = { 
+            baseBet, currentBet, totalNet, allHistory, 
+            chartData, currentSignal, strategy, step1326,
+            maxProfitReached, targetProfit, trailingStop 
+        };
         localStorage.setItem('sicbo_pro_vfinal', JSON.stringify(data));
-    }
-
-    function recalculateNetProfit() {
-        totalNet = 0;
-        allHistory.forEach(h => {
-            if (h.sig !== 'WAIT') {
-                if (h.win) totalNet += (h.betAmount * 0.97);
-                else totalNet -= h.betAmount;
-            }
-        });
     }
 
     function loadData() {
@@ -225,12 +235,15 @@
             const p = JSON.parse(saved);
             baseBet = p.baseBet || 10000; 
             currentBet = p.currentBet || 10000;
+            totalNet = p.totalNet || 0;
             allHistory = p.allHistory || []; 
             chartData = p.chartData || []; 
             currentSignal = p.currentSignal || ''; 
             strategy = p.strategy || 'martingale';
             step1326 = p.step1326 || 0;
-            recalculateNetProfit();
+            maxProfitReached = p.maxProfitReached || 0;
+            targetProfit = p.targetProfit || 0;
+            trailingStop = p.trailingStop || 0;
             updateUI();
         }
     }
@@ -276,7 +289,7 @@
         }
     }
 
-            function submitDice() {
+          function submitDice() {
     const d = inputs.map(i => parseInt(i.value));
     if (d.some(isNaN)) return;
     const total = d[0] + d[1] + d[2];
@@ -303,13 +316,16 @@
 
     chartData.push({ close: total });
     
-    // 2. Logika Sinyal Premium (Filter Ketat)
+        // 2. Logika Sinyal Premium (Hybrid: MA + Loss Recovery Pola)
     if (chartData.length >= 6) {
-        const last6 = chartData.slice(-6).map(v => v.close >= 11 ? 'B' : 'S');
-        
-        // Deteksi Pola Pingpong (B-S-B-S) yang sering bikin loss beruntun
-        const isPingPong = (last6[0] !== last6[1] && last6[1] !== last6[2] && last6[2] !== last6[3]);
+        // Data untuk pola (p1 adalah yang terbaru)
+        const last4Raw = chartData.slice(-4);
+        const p1 = last4Raw[3].close >= 11 ? 'BIG' : 'SMALL';
+        const p2 = last4Raw[2].close >= 11 ? 'BIG' : 'SMALL';
+        const p3 = last4Raw[1].close >= 11 ? 'BIG' : 'SMALL';
+        const p4 = last4Raw[0].close >= 11 ? 'BIG' : 'SMALL';
 
+        // Hitung Moving Average
         const getMA = (p) => {
             let sum = 0; let len = chartData.length;
             for(let i = len-1; i > len-1-p; i--) sum += chartData[i].close;
@@ -317,32 +333,41 @@
         };
         const ma3 = getMA(3), ma5 = getMA(5);
         
-        // Tentukan arah tren dasar
-        let potentialSig = (ma3 > ma5) ? 'BIG' : 'SMALL';
-
-        // Hitung kekalahan beruntun asli (bukan WAIT)
+        // Cek Riwayat Kekalahan (Hanya taruhan asli)
         const realBets = allHistory.filter(h => h.sig !== 'WAIT').slice(0, 3);
         const isTripleLoss = (realBets.length === 3 && realBets.every(h => h.win === false));
         
-        // Hitung durasi WAIT yang sudah berjalan
+        // Hitung durasi WAIT setelah triple loss
         let consecutiveWait = 0;
         for (let h of allHistory) {
             if (h.sig === 'WAIT') consecutiveWait++;
             else break; 
         }
 
-        // PENENTUAN SINYAL AKHIR
-        if (isPingPong) {
-            currentSignal = 'WAIT'; // Amankan modal jika pola tidak stabil
-        } else if (isTripleLoss && consecutiveWait < 3) {
-            currentSignal = 'WAIT'; // Paksa tunggu 3 putaran setelah loss 3x
-        } else if (Math.abs(ma3 - ma5) < 0.3) {
-            currentSignal = 'WAIT'; // Tren terlalu datar, sangat berisiko
-        } else {
-            currentSignal = potentialSig;
+        // --- EKSEKUSI STRATEGI ---
+
+        // JIKA LOSS 3X: Aktifkan Mode Recovery (Pola)
+        if (isTripleLoss && consecutiveWait < 3) {
+            currentSignal = 'WAIT'; // Berhenti dulu 3x
+        } 
+        else if (isTripleLoss && consecutiveWait === 3) {
+            // Setelah berhenti 3x, gunakan logika pola yang Anda minta untuk 'Balas Dendam'
+            if (p1 === p2 && p2 === p3 && p3 === p4) currentSignal = p1; // BBBB -> B
+            else if (p1 === p2 && p2 === p3 && p3 !== p4) currentSignal = p4; // BSSS -> B
+            else if (p1 !== p2 && p2 !== p3 && p3 !== p4) currentSignal = p4; // BSBS -> B
+            else currentSignal = (ma3 > ma5) ? 'BIG' : 'SMALL'; // Jika pola abstrak, balik ke MA
+        }
+        // KONDISI NORMAL: Selalu pakai MA3 & MA5
+        else {
+            if (Math.abs(ma3 - ma5) < 0.15) {
+                currentSignal = 'WAIT'; // Filter Sideways (Datar)
+            } else {
+                currentSignal = (ma3 > ma5) ? 'BIG' : 'SMALL';
+            }
         }
     }
-
+    
+    // Reset Input dan Simpan Data
     inputs.forEach(i => i.value = ''); 
     inputs[0].focus();
     saveData(); 
@@ -428,8 +453,31 @@
                 </div>
             </div>
         `).join('');
+        
+            // Update Profit Tertinggi (Untuk Trailing Stop)
+    if (totalNet > maxProfitReached) {
+        maxProfitReached = totalNet;
+    }
+
+    // Cek Kondisi Take Profit (TP)
+    if (targetProfit > 0 && totalNet >= targetProfit) {
+        speak("Target profit tercapai. Segera amankan kemenangan Anda.");
+        document.getElementById('current-signal').innerHTML = `<div style="color:#089981">TARGET PROFIT TERLAPUI!<br>AMANKAN SALDO</div>`;
+        document.getElementById('current-signal').className = 'sig-big';
+    }
+
+    // Cek Kondisi Trailing Stop (TS)
+    if (trailingStop > 0 && maxProfitReached > trailingStop) {
+        let batasAman = maxProfitReached - trailingStop;
+        if (totalNet <= batasAman) {
+            speak("Peringatan trailing stop. Profit menurun, segera berhenti.");
+            document.getElementById('current-signal').innerHTML = `<div style="color:#f23645">TRAILING STOP AKTIF!<br>PROFIT TERKUNCI</div>`;
+            document.getElementById('current-signal').className = 'sig-small';
+        }
+    }
+
 }
-    
+
         function undoLast() {
         if (allHistory.length === 0) return;
         
@@ -459,37 +507,32 @@
         updateUI();
     }
 
+        function saveSettings() { 
+        baseBet = parseInt(document.getElementById('baseBetInput').value) || 10000; 
+        targetProfit = parseInt(document.getElementById('tpInput').value) || 0;
+        trailingStop = parseInt(document.getElementById('tsInput').value) || 0;
+        strategy = document.getElementById('strategySelect').value;
+        
+        currentBet = baseBet;
+        maxProfitReached = totalNet; // Reset pengunci profit
+        saveData(); closeSettings(); updateUI(); 
+    }
+
+    // Update juga di dalam openSettings agar angka muncul saat dibuka
     function openSettings() { 
         document.getElementById('baseBetInput').value = baseBet; 
+        document.getElementById('tpInput').value = targetProfit;
+        document.getElementById('tsInput').value = trailingStop;
         document.getElementById('strategySelect').value = strategy;
         document.getElementById('settingsModal').classList.add('show'); 
     }
-    function closeSettings() { document.getElementById('settingsModal').classList.remove('show'); }
-    function saveSettings() { 
-        baseBet = parseInt(document.getElementById('baseBetInput').value) || 10000; 
-        strategy = document.getElementById('strategySelect').value;
-        currentBet = baseBet; step1326 = 0;
-        saveData(); closeSettings(); updateUI(); 
-    }
-    function clearData() { if (confirm("Reset seluruh data sesi?")) { localStorage.removeItem('sicbo_pro_vfinal'); location.reload(); } }
-    
-    window.onload = loadData;
-
-    // 1. Cek status saat aplikasi pertama kali dibuka
-window.addEventListener("DOMContentLoaded", () => {
-    const isPremium = localStorage.getItem("statusPremium");
-    if (isPremium !== "aktif") {
-        document.getElementById("lock-screen").style.display = "flex";
-    }
-});
 
 // 2. Fungsi untuk verifikasi password
 function checkPass() {
     const pass = document.getElementById('app-pass').value;
-    const kodeValid = "PREMIUM97"; // <-- GANTI DENGAN KODE JUALANMU
+    const kodeValid = "PREMIUM99"; 
     
     if (pass === kodeValid) {
-        // Simpan status ke memori HP user selamanya
         localStorage.setItem("statusPremium", "aktif");
         document.getElementById('lock-screen').style.display = 'none';
         alert("Selamat! Akses Premium Aktif Selamanya.");
@@ -498,7 +541,43 @@ function checkPass() {
     }
 }
 
-    if ('serviceWorker' in navigator) {
+// Fungsi Tambahan untuk menghitung ulang profit (PENTING)
+function recalculateNetProfit() {
+    totalNet = 0;
+    allHistory.forEach(h => {
+        if (h.sig !== 'WAIT') {
+            if (h.win) totalNet += (h.betAmount * 0.97);
+            else totalNet -= h.betAmount;
+        }
+    });
+}
+
+function closeSettings() { 
+    document.getElementById('settingsModal').classList.remove('show'); 
+}
+
+function clearData() { 
+    if (confirm("Reset seluruh data sesi?")) { 
+        localStorage.removeItem('sicbo_pro_vfinal'); 
+        location.reload(); 
+    } 
+}
+
+// === EKSEKUSI SAAT START ===
+window.onload = function() {
+    // Cek Status Premium
+    const isPremium = localStorage.getItem("statusPremium");
+    if (isPremium === "aktif") {
+        document.getElementById("lock-screen").style.display = "none";
+    } else {
+        document.getElementById("lock-screen").style.display = "flex";
+    }
+    
+    // Load Data Tersimpan
+    loadData();
+};
+
+if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
       navigator.serviceWorker.register('service-worker.js').then(function(reg) {
         console.log('ServiceWorker registration successful');
