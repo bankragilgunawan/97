@@ -205,7 +205,8 @@
     let allHistory = [];
     let chartData = [];
     let strategy = 'martingale';
-    let step1326 = 0;    
+    let step1326 = 0;
+    let twinGap = 0;    
     const inputs = [document.getElementById('d1'), document.getElementById('d2'), document.getElementById('d3')];
 
     // Fungsi Suara yang lebih stabil
@@ -220,15 +221,18 @@
         }
     }
 
+<!-- Save Data -->
         function saveData() {
-        const data = { 
-            baseBet, currentBet, totalNet, allHistory, 
-            chartData, currentSignal, strategy, step1326,
-            maxProfitReached, targetProfit, trailingStop 
-        };
-        localStorage.setItem('sicbo_pro_vfinal', JSON.stringify(data));
-    }
+    const data = { 
+        baseBet, currentBet, totalNet, allHistory, 
+        chartData, currentSignal, strategy, step1326,
+        maxProfitReached, targetProfit, trailingStop,
+        twinGap // <--- TAMBAHKAN INI AGAR JARAK TWIN TERSIMPAN
+    };
+    localStorage.setItem('sicbo_pro_vfinal', JSON.stringify(data));
+}
 
+<!-- Load Data -->
     function loadData() {
         const saved = localStorage.getItem('sicbo_pro_vfinal');
         if (saved) {
@@ -244,6 +248,8 @@
             maxProfitReached = p.maxProfitReached || 0;
             targetProfit = p.targetProfit || 0;
             trailingStop = p.trailingStop || 0;
+            step1326 = p.step1326 || 0;
+        twinGap = p.twinGap || 0;
             updateUI();
         }
     }
@@ -257,6 +263,7 @@
         });
     });
 
+<!-- Calculate Next Bet -->
         function calculateNextBet(isWin) {
         const p1326 = [1, 3, 2, 6];
         // Jika sedang dalam status WAIT, jangan ubah currentBet, biarkan tetap di angka terakhir
@@ -289,22 +296,41 @@
         }
     }
 
+<!-- Submit Dice -->
           function submitDice() {
     const d = inputs.map(i => parseInt(i.value));
     if (d.some(isNaN)) return;
+
+    // --- 1. LOGIKA DETEKSI TWIN ---
+    const isTwin = (d[0] === d[1] || d[1] === d[2] || d[0] === d[2]);
     const total = d[0] + d[1] + d[2];
+    
+    if (isTwin) {
+        twinGap = 0; 
+    } else {
+        twinGap++; 
+    }
+
+    if (twinGap >= 7) {
+        speak("Peringatan, dadu kembar sudah tidak keluar selama " + twinGap + " kali. Hati-hati.");
+    }
+
     let result = (total >= 11) ? 'BIG' : 'SMALL';
 
-    // 1. Catat histori dengan status sinyal saat ini
+    // --- 2. PENCATATAN HISTORI & PROFIT ---
     if (currentSignal !== '') {
-        const isWait = (currentSignal === 'WAIT');
+        const isWait = (currentSignal === 'WAIT' || currentSignal === '');
         const win = isWait ? false : (result === currentSignal);
         
         allHistory.unshift({
             time: new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}),
-            dice: d.join(','), total, sig: currentSignal, win, 
+            dice: d.join(','), 
+            total, 
+            sig: currentSignal, 
+            win, 
             betAmount: isWait ? 0 : currentBet, 
-            stepState: step1326
+            stepState: step1326,
+            currentTwinGap: twinGap 
         });
 
         if (!isWait) {
@@ -316,16 +342,9 @@
 
     chartData.push({ close: total });
     
-        // 2. Logika Sinyal Premium (Hybrid: MA + Loss Recovery Pola)
+    // --- 3. ANALISIS TREN (MOVING AVERAGE) ---
+    let maSignal = 'WAIT';
     if (chartData.length >= 6) {
-        // Data untuk pola (p1 adalah yang terbaru)
-        const last4Raw = chartData.slice(-4);
-        const p1 = last4Raw[3].close >= 11 ? 'BIG' : 'SMALL';
-        const p2 = last4Raw[2].close >= 11 ? 'BIG' : 'SMALL';
-        const p3 = last4Raw[1].close >= 11 ? 'BIG' : 'SMALL';
-        const p4 = last4Raw[0].close >= 11 ? 'BIG' : 'SMALL';
-
-        // Hitung Moving Average
         const getMA = (p) => {
             let sum = 0; let len = chartData.length;
             for(let i = len-1; i > len-1-p; i--) sum += chartData[i].close;
@@ -333,47 +352,61 @@
         };
         const ma3 = getMA(3), ma5 = getMA(5);
         
-        // Cek Riwayat Kekalahan (Hanya taruhan asli)
+        if (Math.abs(ma3 - ma5) < 0.15) {
+            maSignal = 'WAIT';
+        } else {
+            maSignal = (ma3 > ma5) ? 'BIG' : 'SMALL';
+        }
+
+        // Cek Recovery Mode (Setelah Loss 3x)
         const realBets = allHistory.filter(h => h.sig !== 'WAIT').slice(0, 3);
         const isTripleLoss = (realBets.length === 3 && realBets.every(h => h.win === false));
+        if (isTripleLoss) {
+            let consecutiveWait = 0;
+            for (let h of allHistory) { if (h.sig === 'WAIT') consecutiveWait++; else break; }
+            if (consecutiveWait < 3) maSignal = 'WAIT';
+        }
+    }
+
+    // --- 4. ANALISIS HISTORY (PATTERN MEMORY) ---
+    let patternSignal = null;
+    if (allHistory.length > 2) {
+        const currentDiceStr = [...d].sort().join(','); 
         
-        // Hitung durasi WAIT setelah triple loss
-        let consecutiveWait = 0;
-        for (let h of allHistory) {
-            if (h.sig === 'WAIT') consecutiveWait++;
-            else break; 
-        }
-
-        // --- EKSEKUSI STRATEGI ---
-
-        // JIKA LOSS 3X: Aktifkan Mode Recovery (Pola)
-        if (isTripleLoss && consecutiveWait < 3) {
-            currentSignal = 'WAIT'; // Berhenti dulu 3x
-        } 
-        else if (isTripleLoss && consecutiveWait === 3) {
-            // Setelah berhenti 3x, gunakan logika pola yang Anda minta untuk 'Balas Dendam'
-            if (p1 === p2 && p2 === p3 && p3 === p4) currentSignal = p1; // BBBB -> B
-            else if (p1 === p2 && p2 === p3 && p3 !== p4) currentSignal = p4; // BSSS -> B
-            else if (p1 !== p2 && p2 !== p3 && p3 !== p4) currentSignal = p4; // BSBS -> B
-            else currentSignal = (ma3 > ma5) ? 'BIG' : 'SMALL'; // Jika pola abstrak, balik ke MA
-        }
-        // KONDISI NORMAL: Selalu pakai MA3 & MA5
-        else {
-            if (Math.abs(ma3 - ma5) < 0.15) {
-                currentSignal = 'WAIT'; // Filter Sideways (Datar)
-            } else {
-                currentSignal = (ma3 > ma5) ? 'BIG' : 'SMALL';
+        // Cari di history mulai dari data ke-2 (karena data ke-0 adalah yang baru kita unshift)
+        for (let i = 1; i < allHistory.length - 1; i++) {
+            const histDiceStr = allHistory[i].dice.split(',').map(Number).sort().join(',');
+            
+            if (currentDiceStr === histDiceStr) {
+                // Jika ketemu dadu sama, lihat hasil putaran setelahnya (i-1)
+                patternSignal = allHistory[i-1].total >= 11 ? 'BIG' : 'SMALL';
+                break; 
             }
         }
     }
+
+    // --- 5. FINAL DECISION (FILTER BENTROK) ---
+    if (patternSignal && maSignal !== 'WAIT') {
+        if (maSignal === patternSignal) {
+            currentSignal = maSignal; // Sinyal Kuat (MA & History Sinkron)
+            speak("Sinyal kuat, pola history mendukung tren " + currentSignal);
+        } else {
+            currentSignal = 'WAIT'; // Bentrok! (MA & History beda arah)
+            speak("Sinyal bentrok, lebih baik tunggu.");
+        }
+    } else {
+        currentSignal = maSignal; // Gunakan MA jika pattern tidak ditemukan
+        if (currentSignal !== 'WAIT') speak("Sinyal berikutnya " + currentSignal);
+    }
     
-    // Reset Input dan Simpan Data
+    // --- 6. CLEAN UP & SAVE ---
     inputs.forEach(i => i.value = ''); 
     inputs[0].focus();
     saveData(); 
     updateUI();
 }
 
+<!-- Update Ui -->
     function updateUI() {
         document.getElementById('netTotal').textContent = (totalNet >= 0 ? '+' : '') + new Intl.NumberFormat('id-ID').format(Math.floor(totalNet));
         document.getElementById('netTotal').className = totalNet >= 0 ? 'profit' : 'loss';
@@ -414,45 +447,40 @@
             else speak("Sinyal berikutnya " + currentSignal);
         }
 
-                const checkContainer = document.getElementById('check-items');
+                        const checkContainer = document.getElementById('check-items');
         let checks = [];
         
         // Deteksi Pola untuk UI
         const last6 = chartData.slice(-6).map(v => v.close >= 11 ? 'B' : 'S');
         const isPingPong = last6.length >= 4 && (last6[0] !== last6[1] && last6[1] !== last6[2] && last6[2] !== last6[3]);
 
+        // --- TAMPILAN INDIKATOR TWIN (TAMBAHAN NO. 3) ---
+        let twinColor = twinGap >= 7 ? 'var(--red)' : 'var(--text)';
+        let twinWarning = twinGap >= 7 ? ' <span class="blink" style="color:var(--red); font-size:0.7rem;">(RAWAN!)</span>' : '';
+        
+        checks.push(`
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; padding-bottom:5px; border-bottom:1px solid rgba(255,255,255,0.05);">
+                <span class="val-small">💎 TWIN GAP</span>
+                <b style="color:${twinColor}; font-size:1rem;">${twinGap} Putaran${twinWarning}</b>
+            </div>
+        `);
+
         if (currentSignal === 'WAIT') {
-            // Tampilan Khusus saat WAIT agar user tidak nekat pasang
             let alasan = isPingPong ? "⚠️ POLA PINGPONG TERDETEKSI" : "🔍 MENCARI MOMENTUM AMAN";
+            if (twinGap >= 7) alasan = "⚠️ WASPADA: TWIN SEGERA MUNCUL";
+            
             checks.push(`<div style='text-align:center; color:var(--orange); font-weight:bold; padding:15px; border:1px dashed var(--orange); border-radius:12px; background:rgba(255,152,0,0.05);'>
                 <span style="font-size:0.9rem;">KESIMPULAN: JANGAN PASANG</span><br>
                 <span style="font-size:0.7rem; opacity:0.8; font-weight:normal;">${alasan}</span>
             </div>`);
         } else if (currentSignal) {
-            // Tampilan saat ada Sinyal (Gas)
-            const isGas = (signalStrength === "STRONG" && !isSideways && !isPingPong);
+            const isGas = (signalStrength === "STRONG" && !isSideways && !isPingPong && twinGap < 7);
             checks.push(`<div style="display:flex; justify-content:space-between; margin-bottom:5px;"><span>${isPingPong ? "🟡" : "🟢"} Tren</span> <b>${isPingPong ? 'VOLATIL' : 'STABIL'}</b></div>`);
             checks.push(`<div style="margin-top:5px; padding:12px; background:${isGas ? 'rgba(8,153,129,0.1)' : 'rgba(255,152,0,0.1)'}; border-radius:10px; text-align:center; border:1px solid ${isGas ? 'var(--green)' : 'var(--orange)'}; color:${isGas ? 'var(--green)' : 'var(--orange)'}; font-weight:bold;">
                 KESIMPULAN: ${isGas ? '🚀 GAS EKSEKUSI' : '⚠️ BET MINIMAL / WAIT'}
             </div>`);
         }
         checkContainer.innerHTML = checks.join('');
-
-        // Tampilan Histori dengan penekanan pada status OBSERVE (WAIT)
-        document.getElementById('historyList').innerHTML = allHistory.slice(0, 50).map(h => `
-            <div class="log-item" style="background: ${h.sig === 'WAIT' ? 'rgba(255,152,0,0.08)' : 'transparent'}; border-left: 4px solid ${h.sig === 'WAIT' ? 'var(--orange)' : (h.win ? 'var(--green)' : 'var(--red)')}; margin-bottom: 8px; padding: 12px; border-radius: 8px;">
-                <div style="display:flex; flex-direction:column;">
-                    <span style="font-weight:bold; letter-spacing:1px;">[${h.dice}] → ${h.total >= 11 ? 'BIG' : 'SMALL'}</span>
-                    <small style="opacity:0.5; font-size:0.7rem;">${h.time} | Bet: ${h.betAmount.toLocaleString()}</small>
-                </div>
-                <div style="text-align:right;">
-                    <div style="font-weight:bold; font-size:0.9rem; color:${h.sig === 'WAIT' ? 'var(--orange)' : (h.win ? 'var(--green)' : 'var(--red)')}">
-                        ${h.sig === 'WAIT' ? 'OBSERVE' : (h.win ? 'WIN' : 'LOSS')}
-                    </div>
-                    <small style="opacity:0.6; font-size:0.7rem;">Sinyal: ${h.sig}</small>
-                </div>
-            </div>
-        `).join('');
         
             // Update Profit Tertinggi (Untuk Trailing Stop)
     if (totalNet > maxProfitReached) {
@@ -475,38 +503,63 @@
             document.getElementById('current-signal').className = 'sig-small';
         }
     }
-
+const historyList = document.getElementById('historyList');
+    historyList.innerHTML = allHistory.map(h => `
+        <div class="log-item">
+            <div style="display:flex; flex-direction:column;">
+                <span style="font-weight:bold;">[${h.dice}] → ${h.total >= 11 ? 'BIG' : 'SMALL'}</span>
+                <small style="opacity:0.5;">${h.time}</small>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-weight:bold; color:${h.sig === 'WAIT' ? 'var(--orange)' : (h.win ? 'var(--green)' : 'var(--red)')}">
+                    ${h.sig === 'WAIT' ? 'OBSERVE' : (h.win ? 'WIN' : 'LOSS')}
+                </div>
+                <small style="opacity:0.6;">Sinyal: ${h.sig}</small>
+            </div>
+        </div>
+    `).join('');
 }
 
+<!-- undoLast -->
         function undoLast() {
-        if (allHistory.length === 0) return;
+    if (allHistory.length === 0) return;
+    
+    // 1. Hapus data terakhir dari history dan chart
+    allHistory.shift();
+    chartData.pop();
+    
+    // 2. Kembalikan state data (Bet & Twin Gap)
+    if (allHistory.length > 0) {
+        const lastData = allHistory[0];
         
-        // 1. Hapus data terakhir yang salah input
-        allHistory.shift();
-        chartData.pop();
-        
-        // 2. Kembalikan nominal Bet ke posisi sebelumnya
-        if (allHistory.length > 0) {
-            const lastData = allHistory[0];
-            // Hitung ulang taruhan berikutnya berdasarkan hasil data terakhir yang ada
-            if (lastData.sig !== 'WAIT') {
-                calculateNextBet(lastData.win);
-            } else {
-                // Jika data terakhir sebelum undo adalah WAIT, tetap gunakan bet terakhir yang valid
-                currentBet = currentBet; 
-            }
-            step1326 = lastData.stepState;
+        // KEMBALIKAN JARAK KEMBAR (Twin Gap)
+        // Kita ambil dari properti 'currentTwinGap' yang sudah Anda simpan di submitDice
+        twinGap = lastData.currentTwinGap || 0;
+
+        // Hitung ulang taruhan berikutnya berdasarkan data terakhir yang tersisa
+        if (lastData.sig !== 'WAIT' && lastData.sig !== '') {
+            calculateNextBet(lastData.win);
         } else {
-            // Jika histori kosong setelah undo, balik ke awal
-            currentBet = baseBet;
-            step1326 = 0;
+            // Jika data sebelumnya adalah WAIT, tetap pada bet terakhir
+            currentBet = currentBet; 
         }
         
-        recalculateNetProfit();
-        saveData(); 
-        updateUI();
+        // Kembalikan step strategi (khusus 1-3-2-6)
+        step1326 = lastData.stepState || 0;
+    } else {
+        // Jika histori kosong total setelah undo, reset semua ke awal
+        currentBet = baseBet;
+        step1326 = 0;
+        twinGap = 0;
     }
+    
+    // 3. Sinkronisasi ulang profit dan simpan ke memori
+    recalculateNetProfit();
+    saveData(); 
+    updateUI();
+}
 
+<!-- saveSettings -->
         function saveSettings() { 
         baseBet = parseInt(document.getElementById('baseBetInput').value) || 10000; 
         targetProfit = parseInt(document.getElementById('tpInput').value) || 0;
