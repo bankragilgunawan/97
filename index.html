@@ -1,0 +1,1621 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sic Bo Analyzer Pro</title>
+    <link rel="manifest" href="manifest.json" />
+        <style>
+        :root {
+            --bg: #0b0e14; --surface: #151921; --green: #089981; --red: #f23645;
+            --purple: #9d4edd; --blue: #2962ff; --orange: #ff9800; --text: #d1d4dc; --border: #2a2e39;
+        }
+        * { box-sizing: border-box; font-family: 'Trebuchet MS', sans-serif; }
+        body { margin: 0; background: var(--bg); color: var(--text); overflow-x: hidden; padding-bottom: 30px; }
+        .app-container { display: flex; flex-direction: column; max-width: 500px; margin: 0 auto; padding: 15px; gap: 12px; min-height: 100vh;
+    position: relative; /* Wajib ada agar z-index berfungsi */
+    z-index: 1; /* Lebih tinggi dari lampu (-1) */
+}
+
+        .stats-header { display: flex; justify-content: space-between; align-items: center; background: var(--surface); padding: 15px; border-radius: 12px; border: 1px solid var(--border); }
+        #netTotal { font-size: 1.8rem; font-weight: bold; margin: 0; }
+        .profit { color: var(--green); }
+        .loss { color: var(--red); }
+
+        .card { background: var(--surface); padding: 15px; border-radius: 12px; border: 1px solid var(--border); }
+        
+        #current-signal { 
+            padding: 20px; border-radius: 15px; text-align: center; font-weight: 800; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); transition: all 0.3s ease;
+        }
+                .sig-big { 
+            background: linear-gradient(135deg, #089981 0%, #056656 100%); 
+            color: white; 
+            border: 1px solid #0bd4b3; 
+            box-shadow: 0 10px 20px rgba(8, 153, 129, 0.3);
+        }
+        .sig-small { 
+            background: linear-gradient(135deg, #f23645 0%, #b2202b 100%); 
+            color: white; 
+            border: 1px solid #ff5a67; 
+            box-shadow: 0 10px 20px rgba(242, 54, 69, 0.3);
+        }
+        .sig-wait { 
+            background: #2a2e39; 
+            color: #787b86; 
+            border: 1px solid #363a45;
+        }
+
+        /* Tambahkan ini sedikit agar teks di kolom tidak tabrakan di HP kecil */
+        #current-signal {
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 15px 10px !important; /* Padding kiri kanan diperkecil sedikit */
+        }
+
+        .dice-input-section { background: var(--surface); padding: 15px; border-radius: 12px; border: 1px solid var(--border); text-align: center; }
+        .dice-inputs { display: flex; justify-content: center; gap: 10px; margin: 10px 0; }
+        .dice-inputs input { width: 50px; height: 50px; text-align: center; font-size: 1.5rem; font-weight: bold; background: #1e222d; border: 2px solid var(--border); color: white; border-radius: 8px; }
+        
+        .log-container { background: var(--surface); border-radius: 12px; padding: 15px; border: 1px solid var(--border); }
+        #historyList { height: 250px; overflow-y: auto; font-size: 0.85rem; margin-top: 10px; }
+        .log-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #2a2e39; align-items: center; }
+        
+        .val-small { font-size: 0.7rem; color: #787b86; text-transform: uppercase; letter-spacing: 1px; }
+        .btn-clear { background: none; border: 1px solid var(--red); color: var(--red); padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.7rem; }
+        .btn-undo { background: none; border: 1px solid var(--orange); color: var(--orange); padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.7rem; margin-right: 5px; }
+        
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; align-items: center; justify-content: center; }
+        .modal.show { display: flex; }
+        .modal-content { background: #1e222d; padding: 25px; border-radius: 15px; width: 90%; max-width: 380px; border: 1px solid var(--border); }
+        select, input[type="number"] { width: 100%; padding: 12px; margin: 8px 0 15px; background: #131722; border: 1px solid #363a45; color: white; border-radius: 8px; }
+        
+        .blink { animation: blinker 1.2s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.1; } 
+        }        
+
+/* === KODE LOCK SCREEN INTERAKTIF (PULL CHAIN) === */
+#lock-screen {
+    position: fixed;
+    inset: 0;
+    background: #05070a; /* Gelap total sebelum lampu nyala */
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    z-index: 999999;
+    transition: background 0.5s ease;
+}
+
+/* Area Lampu */
+.lamp-container {
+    position: relative;
+    width: 100%;
+    height: 300px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Kabel Lampu */
+.wire {
+    width: 4px;
+    height: 100px;
+    background: #222;
+}
+
+/* Kap Lampu */
+.bulb-holder {
+    width: 60px;
+    height: 40px;
+    background: #333;
+    border-radius: 5px;
+    position: relative;
+    z-index: 2;
+}
+
+/* Bohlam */
+#bulb {
+    width: 80px;
+    height: 80px;
+    background: #1a1a1a;
+    border-radius: 50%;
+    margin-top: -10px;
+    transition: all 0.3s ease;
+    border: 2px solid #222;
+}
+
+/* Tali Penarik */
+.pull-chain {
+    width: 4px;
+    height: 150px;
+    background: #555;
+    position: absolute;
+    top: 100px;
+    right: calc(50% - 40px);
+    cursor: pointer;
+    transition: height 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.pull-chain:active { height: 170px; }
+
+.handle {
+    width: 15px;
+    height: 30px;
+    background: #888;
+    border-radius: 10px;
+    position: absolute;
+    bottom: 0;
+}
+
+/* Konten Form yang Tersembunyi */
+.lock-card {
+    opacity: 0;
+    transform: translateY(30px) scale(0.9);
+    transition: all 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    background: rgba(15, 20, 28, 0.95); /* Hitam pekat transparan */
+    backdrop-filter: blur(10px);
+    padding: 40px 25px;
+    border-radius: 30px;
+    border: 1px solid #333;
+    width: 90%;
+    max-width: 360px;
+    text-align: center;
+    pointer-events: none;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+}
+
+/* Input Kode Bergaya Brankas Digital */
+#app-pass {
+    width: 100%;
+    height: 70px;
+    background: #000 !important;
+    border: 1px solid #444 !important;
+    border-bottom: 4px solid #ffcc00 !important; /* Garis bawah emas */
+    color: #ffcc00 !important;
+    font-family: 'Courier New', monospace;
+    font-size: 2rem;
+    letter-spacing: 15px; /* Jarak bintang lebar */
+    text-align: center;
+    border-radius: 12px;
+    margin: 25px 0;
+    outline: none;
+    transition: all 0.3s;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+}
+
+#app-pass:focus {
+    border-color: #ffcc00 !important;
+    box-shadow: 0 0 20px rgba(255, 204, 0, 0.2);
+}
+
+/* Tombol Aktivasi Bergaya Pill (Lonjong) dengan Efek Pulse */
+.btn-activate {
+    width: 100%;
+    height: 60px;
+    background: #1a1a1a;
+    color: #ffcc00 !important;
+    border: 2px solid #ffcc00;
+    border-radius: 50px; /* Bentuk lonjong */
+    font-weight: 800;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Efek cahaya berdenyut pada tombol */
+.btn-activate::after {
+    content: "";
+    position: absolute;
+    width: 100%; height: 100%;
+    background: rgba(255, 204, 0, 0.1);
+    animation: pulseBtn 2s infinite;
+}
+
+@keyframes pulseBtn {
+    0% { opacity: 0.8; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(1.05); }
+    100% { opacity: 0.8; transform: scale(1); }
+}
+
+.btn-activate:hover {
+    background: #ffcc00;
+    color: #000 !important;
+    box-shadow: 0 0 30px rgba(255, 204, 0, 0.5);
+}
+
+/* SAAT LAMPU MENYALA */
+.light-on #lock-screen { background: #0b0e14; }
+.light-on #bulb { 
+    background: #ffcc00; 
+    box-shadow: 0 0 100px #ffcc00, 0 0 200px rgba(255,204,0,0.4);
+    border-color: #fff;
+}
+.light-on .lock-card { 
+    opacity: 1; 
+    transform: translateY(0); 
+    pointer-events: auto;
+}
+
+/* --- EFEK CAHAYA (SUPER TERANG) --- */
+.light-mode-on #bg-bulb {
+    background: #fff000; /* Kuning murni paling terang */
+    opacity: 1.0;
+    /* Gabungan 3 lapis shadow agar cahaya sangat pekat dan luas */
+    box-shadow: 
+        0 0 50px 20px #fff,               /* Cahaya inti putih */
+        0 0 150px 60px rgba(255, 240, 0, 0.9), /* Pendaran kuning utama */
+        0 0 300px 100px rgba(255, 200, 0, 0.4); /* Cahaya sebar luas */
+    border-color: #fff;
+}
+
+.light-mode-on .app-container {
+    /* Meningkatkan kontras warna latar belakang saat lampu menyala */
+    background: radial-gradient(circle at center 200px, #3a4252 0%, #0b0e14 90%) !important;
+}
+
+/* Menambahkan efek glow pada teks menu agar terlihat terkena cahaya dari belakang */
+.light-mode-on .card, 
+.light-mode-on .stats-header {
+    border-color: rgba(255, 240, 0, 0.3) !important;
+    box-shadow: 0 0 20px rgba(255, 240, 0, 0.1);
+}
+
+@keyframes shake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    50% { transform: translateX(5px); }
+    75% { transform: translateX(-5px); }
+    100% { transform: translateX(0); }
+}
+
+.modal-shake {
+    animation: shake 0.3s ease-in-out;
+}
+
+/* Efek Judul Emas Berkilau */
+.premium-title {
+    background: linear-gradient(to right, #bf953f, #fcf6ba, #b38728);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 900 !important;
+    letter-spacing: 2px;
+    animation: goldGlow 2s infinite;
+}
+
+@keyframes goldGlow {
+    0% { filter: drop-shadow(0 0 2px rgba(255,204,0,0.5)); }
+    50% { filter: drop-shadow(0 0 10px rgba(255,204,0,0.8)); }
+    100% { filter: drop-shadow(0 0 2px rgba(255,204,0,0.5)); }
+}
+
+/* Animasi Getar jika Salah */
+.modal-shake {
+    animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+@keyframes shake {
+    10%, 90% { transform: translate3d(-1px, 0, 0); }
+    20%, 80% { transform: translate3d(2px, 0, 0); }
+    30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+    40%, 60% { transform: translate3d(4px, 0, 0); }
+}
+
+    .numpad-container {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 15px;
+        background: #131722;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid #2a2e39;
+    }
+    .num-btn {
+        padding: 18px;
+        font-size: 1.4rem;
+        font-weight: bold;
+        background: #1e222d;
+        border: 1px solid #363a45;
+        color: white;
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    /* Warna tombol Mic Biru */
+    .btn-mic { background: var(--blue); border-color: #448aff; }
+    /* Warna tombol hapus dan reset */
+    .btn-del { color: #f23645; border-color: #f23645; }
+    .btn-res { color: #ff9800; border-color: #ff9800; }
+    
+    .num-btn:active { transform: scale(0.92); opacity: 0.8; }
+    
+    body {
+    /* ... kode lainnya ... */
+    transition: background 0.4s ease, color 0.4s ease;
+}
+
+.light-mode-on {
+    --bg: #f0f2f5;
+    --surface: #ffffff;
+    --text: #1c1e21;
+    --border: #dddfe2;
+}
+
+
+    </style>
+</head>
+<body>
+   <div id="lock-screen">
+    <div class="lamp-container">
+        <div class="wire"></div>
+        <div class="bulb-holder"></div>
+        <div id="bulb"></div>
+        <div class="pull-chain" onclick="toggleLight()">
+            <div class="handle"></div>
+        </div>
+    </div>
+
+    <div class="lock-card" id="premium-form">
+        <h2 style="color: white; margin-bottom: 10px; font-size: 1.5rem;">PREMIUM ACCESS</h2>
+        <p style="color: #888; margin-bottom: 15px; font-size: 0.9rem;">Tarik tali lampu dan masukkan kode aktivasi</p>
+        
+        <input type="password" id="app-pass" placeholder="KODE AKTIVASI">
+        
+       <button class="btn-activate" onclick="checkPass()">
+    <span id="btn-icon">🔒</span> UNLOCK SYSTEM
+</button>
+        
+        <a href="https://wa.me/6282121218466" style="color: var(--green); display: block; margin-top: 20px; font-size: 14px; text-decoration: none; font-weight: bold;">
+            Beli Lisensi Premium
+        </a>
+    </div>
+</div>
+
+<div class="app-container">
+   <div class="stats-header">
+    <div>
+        <div class="val-small">NET PROFIT (IDR)</div>
+        <h2 id="netTotal">0</h2>
+    </div>
+    <div style="display: flex; gap: 8px;">
+    <button onclick="toggleBackgroundLight()" id="btnLight" style="background:none; border:1px solid #363a45; color:#787b86; padding:8px 12px; border-radius:6px; cursor:pointer; font-size: 1.2rem; transition: all 0.3s ease;">
+    🌞
+</button>
+    
+    <button onclick="resetOnlyProfit()" style="background:none; border:1px solid var(--red); color:var(--red); padding:8px 12px; border-radius:6px; cursor:pointer; font-size: 1.1rem;" title="Reset Profit">♻️</button>
+    
+    <button onclick="openSettings()" style="background:none; border:1px solid #363a45; color:#787b86; padding:8px 12px; border-radius:6px; cursor:pointer;">⚙️</button>
+</div>
+</div>
+    <div class="card" style="background: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
+            <div class="val-small">STATISTIK SESI</div>
+            <div style="display: flex; gap: 20px;">
+                <div style="text-align: right;">
+                    <span style="font-size: 0.6rem; color: var(--green); display: block;">WIN</span>
+                    <span id="totalWin" style="font-size: 1.2rem; font-weight: bold; color: var(--green);">0</span>
+                </div>
+                <div style="text-align: right;">
+                    <span style="font-size: 0.6rem; color: var(--red); display: block;">LOSS</span>
+                    <span id="totalLoss" style="font-size: 1.2rem; font-weight: bold; color: var(--red);">0</span>
+                </div>
+            </div>
+        </div>
+        <div id="check-items" style="font-size: 0.8rem; display: flex; flex-direction: column; gap: 8px;">
+            <div style='text-align:center; opacity:0.5;'>Menunggu minimal 3 data dadu...</div>
+        </div>
+    </div>
+
+    <div id="current-signal" class="sig-wait">MASUKKAN DATA AWAL</div>
+
+   <div class="dice-input-section">
+    <div style="display: none;">
+        <input type="number" id="d1"><input type="number" id="d2"><input type="number" id="d3">
+    </div>
+
+    <div style="margin: 0 auto 10px; text-align: center; background: #0b0e14; padding: 15px; border-radius: 12px; border: 2px solid #2a2e39; max-width: 100%;">
+        <div id="voiceStatus" style="font-size: 0.65rem; color: var(--blue); margin-bottom: 5px; height: 15px; font-style: italic; overflow: hidden; white-space: nowrap;">
+            READY TO INPUT
+        </div>
+        <div id="digit-monitor" style="font-size: 1.2rem; color: #5d606b; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;">
+            _ _ _
+        </div>
+    </div>
+
+    <div class="numpad-container" style="margin-top: 0;">
+        <button class="num-btn" onclick="pressNum(1)">1</button>
+        <button class="num-btn" onclick="pressNum(2)">2</button>
+        <button class="num-btn" onclick="pressNum(3)">3</button>
+        <button class="num-btn" onclick="pressNum(4)">4</button>
+        <button class="num-btn" onclick="pressNum(5)">5</button>
+        <button class="num-btn" onclick="pressNum(6)">6</button>
+        <button class="num-btn btn-res" onclick="resetNumpad()">C</button>
+        <button class="num-btn btn-del" onclick="deleteLastNum()">⌫</button>
+        <button id="voiceBtn" class="num-btn btn-mic" onclick="startQuickListen()">🎙️</button>
+    </div>
+    
+    <div id="stratLabel" class="val-small" style="color: var(--purple); font-weight:bold; margin-top: 10px;">
+        STRATEGY: Martingale
+    </div>
+</div>
+
+    <div class="log-container">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="val-small">HISTORI TRANSAKSI</div>
+            <div>
+                <button class="btn-undo" onclick="undoLast()">UNDO</button>
+                <button class="btn-clear" onclick="clearData()">CLEAR</button>
+            </div>
+        </div>
+        <div id="historyList"></div>
+    </div>
+</div>
+
+<div id="settingsModal" class="modal">
+    <div class="modal-content" style="max-height: 90vh; overflow-y: auto;">
+        <h3 style="color:white; margin-top:0; border-bottom: 2px solid var(--purple); padding-bottom: 10px;">🤖 AI & System Setup</h3>
+        
+        <div style="background: rgba(157, 78, 221, 0.1); padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 1px solid var(--purple);">
+            <label class="val-small" style="color: var(--purple); font-weight: bold;">MODE AI INTELLIGENCE</label>
+            <select id="aiToggle" onchange="toggleAISettings()" style="border-color: var(--purple); background: #1a1e2e;">
+                <option value="OFF">OFF (Manual Mode)</option>
+                <option value="ON">ON (Auto Management)</option>
+            </select>
+        </div>
+
+        <div id="ai-fields" style="display:none; background: rgba(255,255,255,0.03); padding: 12px; border-radius: 10px; margin-bottom: 15px;">
+            <label class="val-small">SALDO AWAL (IDR)</label>
+            <input type="number" id="balanceInput" placeholder="Contoh: 1000000">
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div>
+                    <label class="val-small">AUTO TP (%)</label>
+                    <input type="number" id="tpPercentInput" placeholder="20">
+                </div>
+                <div>
+                    <label class="val-small">AUTO TS (%)</label>
+                    <input type="number" id="tsPercentInput" placeholder="10">
+                </div>
+            </div>
+            <p style="font-size: 0.65rem; color: #089981; margin-top: 5px;">⚡ AI akan set Bet otomatis di 1% saldo.</p>
+        </div>
+
+        <div id="manual-fields">
+            <label class="val-small">BASE BET MANUAL</label>
+            <input type="number" id="baseBetInput">
+            
+            <label class="val-small">TARGET PROFIT (FIXED)</label>
+            <input type="number" id="tpInput">
+            
+            <label class="val-small">TRAILING STOP (FIXED)</label>
+            <input type="number" id="tsInput">
+        </div>
+
+        <label class="val-small">STRATEGI BETTING</label>
+        <select id="strategySelect">
+            <option value="martingale">Martingale</option>
+            <option value="parlay">Parlay</option>
+            <option value="1326">System 1-3-2-6</option>
+            <option value="dalembert">D'Alembert</option>
+        </select>
+        
+        <div style="background: rgba(41, 98, 255, 0.1); padding: 12px; border-radius: 10px; margin-bottom: 15px; border: 1px solid var(--blue);">
+    <label class="val-small" style="color: var(--blue); font-weight: bold;">🎙️ VOICE INPUT CONTROL</label>
+    <select id="voiceInputToggle" style="border-color: var(--blue); background: #1a1e2e;">
+        <option value="OFF">Voice Input: OFF</option>
+        <option value="ON">Voice Input: ON</option>
+    </select>
+    <p style="font-size: 0.6rem; color: #787b86; margin-top: 5px;">Sebutkan 3 angka dadu (contoh: "Satu Empat Enam") untuk input otomatis.</p>
+</div>
+
+        <button onclick="saveSettings()" style="width:100%; padding:15px; background:var(--purple); color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer; margin-top:10px; box-shadow: 0 4px 15px rgba(157, 78, 221, 0.3);">AKTIFKAN KONFIGURASI</button>
+        
+        <hr style="border: 0; border-top: 1px solid #2a2e39; margin: 20px 0;">
+        <button onclick="logoutPremium()" style="width:100%; padding:8px; background:none; color:var(--red); border:1px solid var(--red); border-radius:8px; font-size: 0.7rem; cursor:pointer;">LOGOUT & LOCK SYSTEM</button>
+        <button onclick="closeSettings()" style="background:none; border:none; color:#5d606b; width:100%; margin-top:10px; cursor:pointer;">Batal</button>
+    </div>
+</div>
+
+<script>
+    let baseBet = 10000;
+    let currentBet = 10000;
+    let totalNet = 0;
+    let isVoiceEnabled = false;
+    let maxProfitReached = 0; 
+    let targetProfit = 0;     
+    let trailingStop = 0;     
+    let currentSignal = '';   
+    let allHistory = [];
+    let chartData = [];
+    let strategy = 'martingale';
+    let step1326 = 0;
+    let twinGap = 0;
+        
+    // --- VARIABEL AI BARU ---
+    let aiMode = "OFF";
+    let initialBalance = 0;
+    let tpPercent = 0;
+    let tsPercent = 0;
+    // ------------------------
+
+    const inputs = [document.getElementById('d1'), document.getElementById('d2'), document.getElementById('d3')];
+
+    // Fungsi Suara yang lebih stabil
+    function speak(text) {
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel(); // Hentikan suara sebelumnya
+            const msg = new SpeechSynthesisUtterance(text);
+            msg.lang = 'id-ID';
+            msg.rate = 1.0;
+            msg.pitch = 1.0;
+            window.speechSynthesis.speak(msg);
+        }
+    }
+
+<!-- Save Data -->
+        function saveData() {
+    const data = { 
+        baseBet, currentBet, totalNet, allHistory, 
+        chartData, currentSignal, strategy, step1326,
+        maxProfitReached, targetProfit, trailingStop,
+        twinGap // <--- TAMBAHKAN INI AGAR JARAK TWIN TERSIMPAN
+    };
+    localStorage.setItem('sicbo_pro_vfinal', JSON.stringify(data));
+}
+
+<!-- Load Data -->
+    function loadData() {
+        const saved = localStorage.getItem('sicbo_pro_vfinal');
+        if (saved) {
+            const p = JSON.parse(saved);
+            baseBet = p.baseBet || 10000; 
+            currentBet = p.currentBet || 10000;
+            totalNet = p.totalNet || 0;
+            allHistory = p.allHistory || []; 
+            chartData = p.chartData || []; 
+            currentSignal = p.currentSignal || ''; 
+            strategy = p.strategy || 'martingale';
+            step1326 = p.step1326 || 0;
+            maxProfitReached = p.maxProfitReached || 0;
+            targetProfit = p.targetProfit || 0;
+            trailingStop = p.trailingStop || 0;
+            step1326 = p.step1326 || 0;
+        twinGap = p.twinGap || 0;
+            updateUI();
+        }
+    }
+
+    inputs.forEach((input, index) => {
+    // 1. Deteksi saat mengetik angka (Pindah Maju)
+    input.addEventListener('input', (e) => {
+        if (e.target.value.length >= 1) {
+            // Batasi hanya 1 angka per kotak
+            if (e.target.value > 6) e.target.value = 6;
+            if (e.target.value < 1) e.target.value = 1;
+            
+            if (index < 2) {
+                inputs[index + 1].focus();
+            } else {
+                submitDice(); // Jika kotak ke-3 isi, langsung submit
+            }
+        }
+    });
+
+    // 2. Deteksi saat hapus/backspace (Pindah Mundur)
+    input.addEventListener('keydown', (e) => {
+        if (e.key === "Backspace" && input.value === "" && index > 0) {
+            // Jika kotak kosong dan tekan backspace, mundur ke kotak sebelumnya
+            inputs[index - 1].focus();
+        }
+    });
+
+    // 3. Auto-select saat diklik (Biar gampang ganti angka)
+    input.addEventListener('click', () => {
+        input.select();
+    });
+});
+
+<!-- Calculate Next Bet -->
+        function calculateNextBet(isWin) {
+        const p1326 = [1, 3, 2, 6];        
+        // Jika sedang dalam status WAIT, jangan ubah currentBet, biarkan tetap di angka terakhir
+        if (currentSignal === 'WAIT') return; 
+
+        switch (strategy) {
+            case 'martingale':
+                // Reset ke awal HANYA jika benar-benar WIN
+                if (isWin) {
+                    currentBet = baseBet;
+                } else {
+                    currentBet = Math.ceil((currentBet * 2.04) / 100) * 100;
+                }
+                break;
+                
+            case 'parlay':
+                currentBet = isWin ? Math.floor(currentBet * 1.97) : baseBet;
+                break;
+                
+            case '1326':
+                if (isWin) { step1326++; if (step1326 >= 4) step1326 = 0; } 
+                else { step1326 = 0; }
+                currentBet = baseBet * p1326[step1326];
+                break;
+                
+            case 'dalembert':
+                if (isWin) currentBet = Math.max(baseBet, currentBet - baseBet); 
+                else currentBet += Math.ceil(baseBet * 1.1);
+                break;
+        }
+    }
+
+<!-- Submit Dice -->
+function submitDice() {
+    const d = inputs.map(i => parseInt(i.value));
+    if (d.some(isNaN)) return;
+
+    // --- 1. LOGIKA DETEKSI TWIN ---
+    const isTwin = (d[0] === d[1] || d[1] === d[2] || d[0] === d[2]);
+    const total = d[0] + d[1] + d[2];
+    
+    if (isTwin) {
+        twinGap = 0; 
+    } else {
+        twinGap++; 
+    }
+
+    if (twinGap >= 7) {
+        speak("Peringatan, dadu kembar sudah tidak keluar selama " + twinGap + " kali.");
+    }
+
+    let result = (total >= 11) ? 'BIG' : 'SMALL';
+
+    // --- 2. PENCATATAN HISTORI & PROFIT ---
+    if (currentSignal !== '') {
+        const isWait = (currentSignal === 'WAIT' || currentSignal === '');
+        const win = isWait ? false : (result === currentSignal);
+        
+        allHistory.unshift({
+            time: new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}),
+            dice: d.join(','), 
+            total, 
+            sig: currentSignal, 
+            win, 
+            betAmount: isWait ? 0 : currentBet, 
+            stepState: step1326,
+            currentTwinGap: twinGap 
+        });
+
+        if (!isWait) {
+            if (win) totalNet += (currentBet * 0.97); 
+            else totalNet -= currentBet;
+            calculateNextBet(win);
+            checkAIProtection();
+        }
+    } else {
+        // Jika data awal (sebelum ada sinyal), tetap simpan histori
+        allHistory.unshift({
+            time: new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}),
+            dice: d.join(','), total, sig: 'OBSERVE', win: false, betAmount: 0, currentTwinGap: twinGap
+        });
+    }
+
+    chartData.push({ close: total });
+    
+        // --- 3. ANALISIS TREN: PATTERN FOLLOWER (IKUTI ARUS POLA) ---
+    let maSignal = 'WAIT';
+    let isFollowingTrend = false;
+    let trendType = "";
+
+    if (allHistory.length >= 4) {
+        const last4 = allHistory.slice(0, 4).map(h => h.total >= 11 ? 'B' : 'S').reverse(); 
+        const streakStr = last4.join(''); // Contoh: 'SSBB'
+
+        // 1. POLA DOUBLE (SSBB -> Next: S) atau (BBSS -> Next: B)
+        if (streakStr === 'SSBB') {
+            isFollowingTrend = true;
+            maSignal = 'SMALL';
+            trendType = "Double (SSBB)";
+        } else if (streakStr === 'BBSS') {
+            isFollowingTrend = true;
+            maSignal = 'BIG';
+            trendType = "Double (BBSS)";
+        }
+
+        // 2. POLA NAGA (BBBB -> Next: B) atau (SSSS -> Next: S)
+        else if (streakStr === 'BBBB') {
+            isFollowingTrend = true;
+            maSignal = 'BIG';
+            trendType = "Naga BIG";
+        } else if (streakStr === 'SSSS') {
+            isFollowingTrend = true;
+            maSignal = 'SMALL';
+            trendType = "Naga SMALL";
+        }
+
+        // 3. POLA PINGPONG (BSBS -> Next: B) atau (SBSB -> Next: S)
+        else if (streakStr === 'BSBS') {
+            isFollowingTrend = true;
+            maSignal = 'BIG';
+            trendType = "Pingpong";
+        } else if (streakStr === 'SBSB') {
+            isFollowingTrend = true;
+            maSignal = 'SMALL';
+            trendType = "Pingpong";
+        }
+
+        // --- EKSEKUSI FOLLOW TREND ---
+        if (isFollowingTrend) {
+            // Cek apakah baru saja LOSS di putaran sebelumnya saat follow trend
+            const lastTrade = allHistory[0];
+            
+            // Logika: Jika Loss 1x, ulangi 1x (Martingale 1 tingkat)
+            if (lastTrade.win === false && lastTrade.betAmount > 0) {
+                // Biarkan calculateNextBet yang mengatur perkalian modal
+                speak("Pola " + trendType + " meleset, coba satu kali lagi.");
+            } else {
+                // Jika baru mulai pola atau baru menang, gunakan Base Bet
+                currentBet = baseBet;
+                step1326 = 0;
+                speak("Mengikuti arus " + trendType + ". Sinyal: " + maSignal);
+            }
+        }
+    }
+
+    // D. JIKA TIDAK ADA POLA EKSTREM (Gunakan Moving Average Biasa)
+    if (!isFollowingTrend && chartData.length >= 6) {
+        const getMA = (p) => {
+            let sum = 0; let len = chartData.length;
+            for(let i = len-1; i > len-1-p; i--) sum += chartData[i].close;
+            return sum / p;
+        };
+        const ma3 = getMA(3), ma5 = getMA(5);
+        
+        if (Math.abs(ma3 - ma5) < 0.15) {
+            maSignal = 'WAIT';
+        } else {
+            maSignal = (ma3 > ma5) ? 'BIG' : 'SMALL';
+        }
+
+        // Recovery Mode (Jika loss 3x beruntun di luar pola)
+        const realBets = allHistory.filter(h => h.sig !== 'WAIT' && h.sig !== 'OBSERVE').slice(0, 3);
+        if (realBets.length === 3 && realBets.every(h => h.win === false)) {
+            maSignal = 'WAIT';
+            speak("Sinyal tidak stabil, mode observasi.");
+        }
+    }
+
+    // --- 4. ANALISIS HISTORY (PATTERN MEMORY) ---
+    let patternSignal = null;
+    if (allHistory.length > 2) {
+        const currentDiceStr = [...d].sort().join(','); 
+        for (let i = 1; i < allHistory.length - 1; i++) {
+            const histDiceStr = allHistory[i].dice.split(',').map(Number).sort().join(',');
+            if (currentDiceStr === histDiceStr) {
+                patternSignal = allHistory[i-1].total >= 11 ? 'BIG' : 'SMALL';
+                break; 
+            }
+        }
+    }
+
+     // --- 5. FINAL DECISION (PENENTUAN AKHIR) ---
+    
+    // Prioritas 1: Jika sedang mengikuti Tren (Naga/Pingpong/Double)
+    if (isFollowingTrend) {
+        currentSignal = maSignal;
+        // Notifikasi suara sudah dilakukan di Bagian 3
+    } 
+    // Prioritas 2: Jika ada kecocokan antara Pattern History dan Moving Average
+    else if (patternSignal && maSignal !== 'WAIT') {
+        if (maSignal === patternSignal) {
+            currentSignal = maSignal;
+            speak("Sinyal kuat, pola history mendukung tren " + currentSignal);
+        } else {
+            currentSignal = 'WAIT'; // Bentrok, lebih aman diam
+            speak("Sinyal bentrok, harap tunggu.");
+        }
+    } 
+    // Prioritas 3: Gunakan sinyal Moving Average standar
+    else {
+        currentSignal = maSignal;
+        if (currentSignal !== 'WAIT') {
+            speak("Sinyal berikutnya " + currentSignal);
+        }
+    }
+    
+    // --- 6. CLEAN UP & SAVE ---
+    if(tempDice) tempDice = []; 
+    if(typeof updateInputDisplay === "function") updateInputDisplay();
+    saveData(); 
+    updateUI();
+}
+
+<!-- Update Ui -->
+    function updateUI() {
+    // 1. Update Tampilan Profit
+    document.getElementById('netTotal').textContent = (totalNet >= 0 ? '+' : '') + new Intl.NumberFormat('id-ID').format(Math.floor(totalNet));
+    document.getElementById('netTotal').className = totalNet >= 0 ? 'profit' : 'loss';
+    
+    // 2. MODIFIKASI WIN/LOSS: Filter hanya yang bukan dari sesi yang sudah di-reset
+    const currentSessionHistory = allHistory.filter(h => h.sig !== 'WAIT' && !h.sessionReset);
+    document.getElementById('totalWin').textContent = currentSessionHistory.filter(h => h.win).length;
+    document.getElementById('totalLoss').textContent = currentSessionHistory.filter(h => !h.win).length;
+    
+    document.getElementById('stratLabel').textContent = "STRATEGY: " + strategy.toUpperCase();
+
+         // 3. Update Sinyal Visual & 10 Hasil Terakhir
+    const sigEl = document.getElementById('current-signal');
+    if (currentSignal) {
+        let formattedBet = new Intl.NumberFormat('id-ID').format(Math.ceil(currentBet));
+        const formatIDR = (num) => "Rp " + new Intl.NumberFormat('id-ID').format(Math.floor(num));
+
+        // Ambil 10 hasil terakhir (B atau S)
+        const last10 = allHistory.slice(0, 10).map(h => {
+            const res = h.total >= 11 ? 'B' : 'S';
+            const color = res === 'B' ? '#0bd4b3' : '#ff5a67';
+            return `<span style="color: ${color}; font-weight: bold; margin: 0 2px;">${res}</span>`;
+        }).reverse().join('-');
+
+        sigEl.innerHTML = `
+            <div style="font-size: 0.65rem; opacity: 0.8; letter-spacing: 2px; margin-bottom: 5px;">REKOMENDASI TRADE</div>
+            <div style="font-size: 2.2rem; margin: 5px 0; letter-spacing: 5px; font-weight: 900; line-height: 1;">${currentSignal}</div>
+            
+            <div style="font-size: 0.75rem; margin-top: 5px; opacity: 0.9; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 4px; display: inline-block;">
+                <span style="color: #787b86; margin-right: 5px;">TREND (10):</span> ${last10 || '-'}
+            </div>
+
+            <div style="border-top: 1px solid rgba(255,255,255,0.2); margin-top: 12px; padding-top: 12px; display: flex; justify-content: space-between; align-items: stretch; gap: 5px;">
+                
+                <div style="text-align: center; flex: 1; background: rgba(0,0,0,0.25); padding: 8px 4px; border-radius: 8px;">
+                    <div style="font-size: 0.5rem; opacity: 0.7; margin-bottom: 3px;">TARGET PROFIT</div>
+                    <div style="font-size: 0.75rem; color: #ffeb3b; font-weight: bold; white-space: nowrap;">${formatIDR(targetProfit)}</div>
+                </div>
+
+                <div style="text-align: center; flex: 1.2; background: rgba(255,255,255,0.15); padding: 8px 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);">
+                    <div style="font-size: 0.5rem; opacity: 0.9; margin-bottom: 3px; color: white;">BET AMOUNT</div>
+                    <div style="font-size: 0.85rem; font-weight: 800; color: #fff; white-space: nowrap;">${currentSignal === 'WAIT' ? 'Rp 0' : formatIDR(currentBet)}</div>
+                </div>
+
+                <div style="text-align: center; flex: 1; background: rgba(0,0,0,0.25); padding: 8px 4px; border-radius: 8px;">
+                    <div style="font-size: 0.5rem; opacity: 0.7; margin-bottom: 3px;">TRAILING STOP</div>
+                    <div style="font-size: 0.75rem; color: #ff9999; font-weight: bold; white-space: nowrap;">${formatIDR(trailingStop)}</div>
+                </div>
+
+            </div>
+        `;
+        
+        sigEl.className = currentSignal === 'BIG' ? 'sig-big' : (currentSignal === 'SMALL' ? 'sig-small' : 'sig-wait');
+    }
+
+    // 4. RENDER HISTORY LIST
+    const historyList = document.getElementById('historyList');
+    historyList.innerHTML = allHistory.map(h => {
+        let statusColor = '#787b86'; 
+        let statusText = 'OBSERVE';
+        let betValue = 'IDR 0';
+
+        // Jika data lama (sessionReset), kita tampilkan tanpa warna Win/Loss agar terlihat sebagai riwayat lama
+        if (h.sig !== 'WAIT' && h.sig !== '' && !h.sessionReset) {
+            statusColor = h.win ? 'var(--green)' : 'var(--red)';
+            statusText = h.win ? 'WIN' : 'LOSS';
+            betValue = 'IDR ' + new Intl.NumberFormat('id-ID').format(h.betAmount);
+        } else if (h.sessionReset && h.sig !== 'WAIT') {
+            // Tampilan untuk history lama yang sudah di-reset
+            statusText = 'PAST DATA';
+            statusColor = '#363a45'; 
+        }
+
+        return `
+            <div class="log-item" style="border-left: 4px solid ${statusColor}; padding: 10px; margin-bottom: 8px; background: rgba(255,255,255,0.03); display: flex; justify-content: space-between; align-items: center; border-radius: 6px; opacity: ${h.sessionReset ? '0.5' : '1'}">
+                <div style="flex: 1;">
+                    <div style="font-weight:bold; color:white;">[${h.dice}]</div>
+                    <div style="font-size:0.7rem; opacity:0.5;">${h.time}</div>
+                </div>
+                
+                <div style="flex: 1; text-align: center;">
+                    <div style="font-weight:bold; color:${statusColor}; font-size:0.8rem;">${betValue}</div>
+                    <div style="font-size:0.6rem; letter-spacing:1px; color:${statusColor}; opacity:0.8;">${statusText}</div>
+                </div>
+
+                <div style="flex: 1; text-align: right;">
+                    <div style="font-weight:bold; color:${h.sig === 'BIG' ? 'var(--green)' : (h.sig === 'SMALL' ? 'var(--red)' : 'white')}">${h.sig}</div>
+                    <div style="font-size:0.6rem; opacity:0.4;">SIGNAL</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+   // --- RENDER INDIKATOR TWIN & STATS ---
+    const checkContainer = document.getElementById('check-items');
+    let checks = [];
+    let twinColor = twinGap >= 7 ? 'var(--red)' : 'var(--text)';
+    let twinWarning = twinGap >= 7 ? ' <span class="blink" style="color:var(--red); font-size:0.7rem;">(RAWAN!)</span>' : '';
+    
+    checks.push(`
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="val-small">💎 TWIN GAP</span>
+            <b style="color:${twinColor};">${twinGap} Putaran${twinWarning}</b>
+        </div>
+    `);
+    checkContainer.innerHTML = checks.join('');
+
+    // --- TAMBAHKAN KODE KONTROL MIC DI SINI ---
+    const vBtn = document.getElementById('voiceBtn');
+    if (vBtn) { 
+        if (isVoiceEnabled) {
+            vBtn.style.opacity = "1";
+            vBtn.style.filter = "grayscale(0%)"; 
+            vBtn.style.pointerEvents = "auto";
+        } else {
+            vBtn.style.opacity = "0.3";
+            vBtn.style.filter = "grayscale(100%)"; 
+            vBtn.style.pointerEvents = "none";
+        }
+    }
+}
+
+<!-- undoLast -->
+        function undoLast() {
+    if (allHistory.length === 0) return;
+    
+    // 1. Hapus data terakhir dari history dan chart
+    allHistory.shift();
+    chartData.pop();
+    
+    // 2. Kembalikan state data (Bet & Twin Gap)
+    if (allHistory.length > 0) {
+        const lastData = allHistory[0];
+        
+        // KEMBALIKAN JARAK KEMBAR (Twin Gap)
+        // Kita ambil dari properti 'currentTwinGap' yang sudah Anda simpan di submitDice
+        twinGap = lastData.currentTwinGap || 0;
+
+        // Hitung ulang taruhan berikutnya berdasarkan data terakhir yang tersisa
+        if (lastData.sig !== 'WAIT' && lastData.sig !== '') {
+            calculateNextBet(lastData.win);
+        } else {
+            // Jika data sebelumnya adalah WAIT, tetap pada bet terakhir
+            currentBet = currentBet; 
+        }
+        
+        // Kembalikan step strategi (khusus 1-3-2-6)
+        step1326 = lastData.stepState || 0;
+    } else {
+        // Jika histori kosong total setelah undo, reset semua ke awal
+        currentBet = baseBet;
+        step1326 = 0;
+        twinGap = 0;
+    }
+    
+    // 3. Sinkronisasi ulang profit dan simpan ke memori
+    recalculateNetProfit();
+    saveData(); 
+    updateUI();
+}
+
+// Fungsi untuk verifikasi password (VERSI FIX)
+function checkPass() {
+    const passInput = document.getElementById('app-pass');
+    const pass = passInput.value;
+    const k = "UFJFTUlVTTk5"; // Password: PREMIUM99
+    
+    if (btoa(pass.toUpperCase()) === k) {
+        // --- PROSES LOGIN BERHASIL ---
+        localStorage.setItem("statusPremium", "aktif");
+        speak("Akses premium diaktifkan");
+
+        // Langsung hilangkan layar kunci tanpa menunggu popup ditutup
+        const lockLayer = document.getElementById('lock-screen');
+        lockLayer.style.transition = "opacity 0.5s ease";
+        lockLayer.style.opacity = '0';
+        setTimeout(() => { 
+            lockLayer.style.display = 'none'; 
+        }, 500);
+
+        // Tampilkan popup sukses (Gaya asli tetap terjaga)
+        luxPopup({
+            title: 'PREMIUM ACTIVATED',
+            message: 'Selamat! Akun Anda telah diverifikasi.',
+            icon: '💎',
+            confirmText: 'MULAI TRADING'
+        });
+    } else {
+        // --- GAGAL LOGIN ---
+        speak("Kode salah");
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        const modalContent = document.querySelector('#customAlert .modal-content');
+        if(modalContent) modalContent.classList.add('modal-shake');
+        
+        luxPopup({
+            title: 'AKSES DITOLAK',
+            message: 'Kode aktivasi tidak valid.',
+            icon: '🚫',
+            confirmText: 'COBA LAGI'
+        });
+    }
+}
+
+// Fungsi Tambahan untuk menghitung ulang profit (PENTING)
+function recalculateNetProfit() {
+    totalNet = 0;
+    allHistory.forEach(h => {
+        if (h.sig !== 'WAIT') {
+            if (h.win) totalNet += (h.betAmount * 0.97);
+            else totalNet -= h.betAmount;
+        }
+    });
+}
+
+function closeSettings() { 
+    document.getElementById('settingsModal').classList.remove('show'); 
+}
+
+function clearData() {
+    luxPopup({
+        type: 'confirm',
+        title: 'HARD RESET',
+        message: 'Hapus semua riwayat dan profit? Status Premium tetap aman.',
+        icon: '⚠️',
+        confirmText: 'HAPUS SEMUA',
+        onConfirm: () => {
+            // Hapus hanya data permainan, JANGAN hapus statusPremium
+            localStorage.removeItem('sicbo_pro_vfinal'); 
+            
+            // Reset Variabel di Memory
+            allHistory = [];
+            chartData = [];
+            totalNet = 0;
+            twinGap = 0;
+            currentBet = baseBet;
+            step1326 = 0;
+            
+            saveData();
+            updateUI();
+            speak("Data permainan telah dibersihkan.");
+        }
+    });
+}
+
+//=== toggleLight ===
+let lightStatus = false;
+let bgLightStatus = false;
+
+function toggleBackgroundLight() {
+    bgLightStatus = !bgLightStatus;
+    const body = document.body;
+    const btn = document.getElementById('btnLight');
+    
+    if (bgLightStatus) {
+        // --- AKTIFKAN MODE TERANG (SUN MODE) ---
+        body.classList.add('light-mode-on');
+        btn.innerHTML = "🌙"; // Berubah jadi bulan agar user tahu klik lagi untuk gelap
+        btn.style.color = "#ff9800"; 
+        btn.style.borderColor = "#ff9800";
+        btn.style.background = "rgba(255, 152, 0, 0.1)";
+        
+        if (navigator.vibrate) navigator.vibrate(30);
+        speak("Mode terang aktif");
+    } else {
+        // --- AKTIFKAN MODE GELAP (MOON MODE) ---
+        body.classList.remove('light-mode-on');
+        btn.innerHTML = "🌞"; // Berubah jadi matahari
+        btn.style.color = "#787b86";
+        btn.style.borderColor = "#363a45";
+        btn.style.background = "none";
+        
+        if (navigator.vibrate) navigator.vibrate([20, 10]);
+        speak("Mode gelap aktif");
+    }
+}
+
+function toggleLight() {
+    const body = document.body;
+    lightStatus = !lightStatus;
+    
+    if (lightStatus) {
+        body.classList.add('light-on');
+        speak("Sistem aktif, masukkan kode");
+        // Beri getaran sedikit jika di HP
+        if (navigator.vibrate) navigator.vibrate(50);
+    } else {
+        body.classList.remove('light-on');
+    }
+}
+
+function resetOnlyProfit() {
+    luxPopup({
+        type: 'confirm',
+        title: 'RESET SESI',
+        message: 'Hapus data profit dan statistik? Riwayat dadu untuk analisa AI akan tetap aman.',
+        icon: '♻️',
+        confirmText: 'YA, RESET',
+        onConfirm: () => {
+            totalNet = 0;
+            maxProfitReached = 0;
+            currentBet = baseBet;
+            step1326 = 0;
+            allHistory.forEach(h => h.sessionReset = true);
+            saveData();
+            updateUI();
+            speak("Sesi telah dibersihkan.");
+        }
+    });
+}
+
+// === logoutPremium ===
+function logoutPremium() {
+    luxPopup({
+        type: 'confirm',
+        title: 'LOGOUT PREMIUM',
+        message: 'Anda akan keluar dari mode premium dan mengunci sistem. Lanjutkan?',
+        icon: '🔒',
+        confirmText: 'LOGOUT & LOCK',
+        onConfirm: () => {
+            localStorage.removeItem('sicbo_pro_token'); // Hapus session
+            location.reload(); // Refresh untuk kembali ke layar login
+        }
+    });
+}
+
+// === EKSEKUSI SAAT START ===
+window.onload = function() {
+    // Cek Status Premium dari LocalStorage
+    const status = localStorage.getItem("statusPremium");
+    
+    if (status === "aktif") {
+        document.getElementById("lock-screen").style.display = "none";
+    } else {
+        // Jika belum aktif, pastikan layar kunci muncul menutupi segalanya
+        document.getElementById("lock-screen").style.display = "flex";
+        // Fokuskan kursor langsung ke kotak password
+        document.getElementById("app-pass").focus();
+    }
+    
+    // Tetap jalankan fungsi muat data history
+    loadData();
+};
+
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('service-worker.js').then(function(reg) {
+        console.log('ServiceWorker registration successful');
+      }, function(err) {
+        console.log('ServiceWorker registration failed: ', err);
+      });
+    });
+    }
+    
+    // --- KUMPULAN FUNGSI KONTROL AI (TEMPEL DI BAWAH) ---
+
+// 1. Fungsi untuk sembunyi/munculkan input (Solusi Error Anda)
+function toggleAISettings() {
+    const aiToggleEl = document.getElementById('aiToggle');
+    if (!aiToggleEl) return; // Keamanan jika elemen tidak ditemukan
+    
+    const mode = aiToggleEl.value;
+    const aiFields = document.getElementById('ai-fields');
+    const manualFields = document.getElementById('manual-fields');
+    
+    if (aiFields && manualFields) {
+        aiFields.style.display = (mode === 'ON') ? 'block' : 'none';
+        manualFields.style.display = (mode === 'OFF') ? 'block' : 'none';
+    }
+}
+
+function checkAIProtection() {
+    if (aiMode !== "ON") return;
+    if (totalNet >= targetProfit) {
+        speak("Target profit tercapai.");
+        let saldoSekarang = initialBalance + totalNet;
+        initialBalance = saldoSekarang; 
+        targetProfit = totalNet + (saldoSekarang * (tpPercent / 100));
+        trailingStop = totalNet - (saldoSekarang * (tsPercent / 100));
+        baseBet = Math.floor(saldoSekarang * 0.01);
+        saveData();
+    }
+    if (totalNet <= trailingStop) {
+        speak("Batas aman tercapai.");
+    }
+}
+
+function luxPopup(options) {
+    const modal = document.getElementById('customAlert');
+    const title = document.getElementById('alertTitle');
+    const message = document.getElementById('alertMessage');
+    const icon = document.getElementById('alertIcon');
+    const btnContainer = document.getElementById('alertButtons');
+    const modalContent = modal.querySelector('.modal-content');
+
+    // 1. Reset konten & animasi
+    title.innerText = options.title || "INFO";
+    message.innerText = options.message || "";
+    icon.innerText = options.icon || "🔔";
+    btnContainer.innerHTML = "";
+    modalContent.classList.remove('modal-shake'); // Reset getar jika ada
+    title.classList.remove('premium-title'); // Reset efek emas
+    modalContent.style.border = "1px solid var(--purple)"; // Reset border default
+
+    // 2. Buat Tombol OK
+    const okBtn = document.createElement('button');
+    okBtn.innerText = options.confirmText || "MENGERTI";
+    
+    // --- LOGIKA TEMA MEWAH ---
+    if (options.title.includes("PREMIUM")) {
+        // Style Tombol Emas Premium
+        okBtn.style = "flex:1; padding:15px; background:linear-gradient(to right, #bf953f, #fcf6ba, #b38728); color:#000; border:none; border-radius:8px; font-weight:900; cursor:pointer; box-shadow: 0 4px 15px rgba(179, 135, 40, 0.4); text-transform: uppercase;";
+        title.classList.add('premium-title');
+    } else {
+        // Style Tombol Standar
+        okBtn.style = "flex:1; padding:12px; background:var(--purple); color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;";
+    }
+
+    okBtn.onclick = () => {
+        modal.classList.remove('show');
+        if (options.onConfirm) options.onConfirm();
+    };
+
+    // 3. Tombol Batal (untuk tipe confirm)
+    if (options.type === 'confirm') {
+        const cancelBtn = document.createElement('button');
+        cancelBtn.innerText = "BATAL";
+        cancelBtn.style = "flex:1; padding:12px; background:none; color:#5d606b; border:1px solid #363a45; border-radius:8px; cursor:pointer; font-weight:bold;";
+        cancelBtn.onclick = () => modal.classList.remove('show');
+        btnContainer.appendChild(cancelBtn);
+    }
+
+    btnContainer.appendChild(okBtn);
+    modal.classList.add('show');
+}
+
+// --- PERBAIKAN VOICE ENGINE (PASTIKAN BAGIAN INI TERUPDATE) ---
+function startQuickListen() {
+    const SpeechRecognition = window.webkitSpeechRecognition || window.speechRecognition;
+    if (!SpeechRecognition) {
+        alert("Browser Anda tidak mendukung fitur suara. Gunakan Google Chrome.");
+        return;
+    }
+
+    const reco = new SpeechRecognition();
+    reco.lang = 'id-ID';
+    reco.interimResults = false;
+    reco.maxAlternatives = 1;
+    
+    const btn = document.getElementById('voiceBtn');
+    const status = document.getElementById('voiceStatus');
+
+    reco.onstart = () => {
+        btn.style.background = "#f23645"; // Warna merah saat merekam
+        btn.style.borderColor = "white";
+        btn.innerHTML = "🔴";
+        status.innerText = "Mendengarkan... Sebutkan 3 angka";
+        if (navigator.vibrate) navigator.vibrate(50);
+    };
+
+        reco.onresult = (event) => {
+        const speechResult = event.results[0][0].transcript.toLowerCase();
+        console.log("Sistem mendengar: " + speechResult);
+        
+        // 1. Bersihkan teks dari titik/koma
+        let cleanText = speechResult.replace(/[.,]/g, '');
+
+        // 2. Kamus konversi kata ke angka
+        const converter = {
+            'satu': '1', 'dua': '2', 'tiga': '3', 'empat': '4', 'lima': '5', 'enam': '6',
+            'nam': '6', 'pat': '4', 'ma': '5', 'tu': '1', 'ga': '3'
+        };
+
+        // 3. Ubah semua kata menjadi angka (contoh: "lima enam enam" jadi "5 6 6")
+        Object.keys(converter).forEach(key => {
+            cleanText = cleanText.replace(new RegExp(key, 'g'), converter[key]);
+        });
+
+        // 4. Ambil SEMUA digit 1-6 yang ada di teks, meskipun nempel (contoh: "566" jadi ["5", "6", "6"])
+        const matches = cleanText.match(/[1-6]/g); 
+
+        // 5. Jika ditemukan minimal 3 angka
+        if (matches && matches.length >= 3) {
+            const d1 = matches[0];
+            const d2 = matches[1];
+            const d3 = matches[2];
+
+            inputs[0].value = d1;
+            inputs[1].value = d2;
+            inputs[2].value = d3;
+            
+            status.style.color = "var(--green)";
+            status.innerText = "OK: " + d1 + "-" + d2 + "-" + d3;
+            speak("Diterima " + d1 + " " + d2 + " " + d3);
+            
+            inputs.forEach(i => i.style.borderColor = "var(--green)");
+
+            setTimeout(() => {
+                submitDice();
+                inputs.forEach(i => i.style.borderColor = "var(--border)");
+                status.innerText = "";
+            }, 800);
+        } else {
+            status.style.color = "var(--red)";
+            status.innerText = "Gagal. Terdengar: '" + speechResult + "'. Sebutkan 3 angka!";
+            speak("Ulangi lagi");
+        }
+    };
+
+    reco.onerror = (event) => {
+        status.style.color = "var(--red)";
+        status.innerText = "Error Mic: " + event.error;
+        console.error("Speech Error: ", event.error);
+    };
+
+    reco.onend = () => {
+        btn.style.background = "#1a1e2e";
+        btn.style.borderColor = "var(--blue)";
+        btn.innerHTML = "🎙️";
+    };
+
+    try {
+        reco.start();
+    } catch(e) {
+        console.log("Mic sedang aktif...");
+    }
+}
+
+function extractNumbers(text) {
+    const numberMap = {
+        'satu': 1, 'dua': 2, 'tiga': 3, 'empat': 4, 'lima': 5, 'enam': 6,
+        'nam': 6, 'pat': 4, 'ma': 5 // Singkatan umum
+    };
+
+    // Pecah kalimat menjadi kata-kata
+    const words = text.replace(/[.,]/g, '').split(/\s+/);
+    let found = [];
+
+    words.forEach(word => {
+        // Cek jika bentuknya angka (1, 2, 3)
+        if (!isNaN(parseInt(word))) {
+            let n = parseInt(word);
+            if (n >= 1 && n <= 6) found.push(n);
+        } 
+        // Cek jika bentuknya kata (satu, dua)
+        else if (numberMap[word]) {
+            found.push(numberMap[word]);
+        }
+    });
+
+    // Eksekusi jika minimal ada 3 angka terdeteksi
+    if (found.length >= 3) {
+        // Ambil 3 angka pertama
+        inputs[0].value = found[0];
+        inputs[1].value = found[1];
+        inputs[2].value = found[2];
+
+        // Efek visual sukses
+        inputs.forEach(i => i.style.border = "2px solid #089981");
+        speak(`Diterima: ${found[0]}, ${found[1]}, ${found[2]}`);
+
+        // Beri jeda 1 detik agar user bisa lihat angkanya sebelum submit otomatis
+        setTimeout(() => {
+            submitDice();
+            inputs.forEach(i => i.style.border = "2px solid var(--border)");
+        }, 1000);
+    }
+}
+
+
+function processVoiceCommand(text) {
+    if (document.getElementById('voiceInputToggle').value !== "ON") return;
+
+    // Normalisasi teks
+    const cleanText = text.toLowerCase();
+    
+    // Gunakan Regex untuk mencari angka baik dalam bentuk kata maupun digit
+    const numberMap = {
+        'satu': 1, 'dua': 2, 'tiga': 3, 'empat': 4, 'lima': 5, 'enam': 6
+    };
+
+    let words = cleanText.replace(/[.,]/g, '').split(/\s+/);
+    let detectedNumbers = [];
+
+    words.forEach(word => {
+        // Cek jika kata adalah angka (1, 2, 3...)
+        if (!isNaN(parseInt(word))) {
+            let num = parseInt(word);
+            if (num >= 1 && num <= 6) detectedNumbers.push(num);
+        } 
+        // Cek jika kata adalah sebutan (satu, dua...)
+        else if (numberMap[word]) {
+            detectedNumbers.push(numberMap[word]);
+        }
+    });
+
+    // Validasi: Harus ada tepat atau minimal 3 angka
+    if (detectedNumbers.length >= 3) {
+        const d1 = detectedNumbers[0];
+        const d2 = detectedNumbers[1];
+        const d3 = detectedNumbers[2];
+
+        document.getElementById('d1').value = d1;
+        document.getElementById('d2').value = d2;
+        document.getElementById('d3').value = d3;
+        
+        speak(`Menganalisis ${d1}, ${d2}, dan ${d3}`);
+        
+        // Visual Feedback
+        inputs.forEach(i => i.style.borderColor = "#089981");
+
+        setTimeout(() => {
+            submitDice();
+            inputs.forEach(i => i.style.borderColor = "var(--border)");
+        }, 1000);
+    }
+}
+
+// Update fungsi saveSettings agar sinkron dengan engine
+function saveSettings() {
+    aiMode = document.getElementById('aiToggle').value;
+    strategy = document.getElementById('strategySelect').value;
+
+    const voiceStatus = document.getElementById('voiceInputToggle').value;
+    isVoiceEnabled = (document.getElementById('voiceInputToggle').value === "ON");
+    
+    // PERBAIKAN: Hapus blok 'if (recognition)' yang menyebabkan error.
+    // Voice engine Anda menggunakan fungsi startQuickListen() yang dipicu tombol,
+    // jadi kita hanya perlu menyimpan preferensi user ke memori.
+
+    if (aiMode === "ON") {
+        initialBalance = parseInt(document.getElementById('balanceInput').value) || 0;
+        tpPercent = parseInt(document.getElementById('tpPercentInput').value) || 20;
+        tsPercent = parseInt(document.getElementById('tsPercentInput').value) || 10;
+        baseBet = Math.floor(initialBalance * 0.01);
+        if (baseBet < 100) baseBet = 100; 
+        targetProfit = initialBalance * (tpPercent / 100);
+        trailingStop = (initialBalance * (tsPercent / 100)) * -1; // Pastikan minus untuk trailing stop
+    } else {
+        baseBet = parseInt(document.getElementById('baseBetInput').value) || 10000;
+        targetProfit = parseInt(document.getElementById('tpInput').value) || 0;
+        trailingStop = parseInt(document.getElementById('tsInput').value) || 0;
+    }
+
+    currentBet = baseBet;
+    saveData(); 
+    closeSettings(); 
+    updateUI();
+    
+    let msg = aiMode === "ON" ? "Sistem AI Aktif. " : "Pengaturan manual disimpan. ";
+    if(voiceStatus === "ON") msg += "Fitur suara siap digunakan.";
+    speak(msg);
+}
+
+function openSettings() { 
+    // Mengisi input dengan nilai variabel saat ini agar muncul di modal
+    document.getElementById('baseBetInput').value = baseBet; 
+    document.getElementById('tpInput').value = targetProfit;
+    document.getElementById('tsInput').value = trailingStop;
+    document.getElementById('strategySelect').value = strategy;
+    
+    // Menampilkan modal
+    document.getElementById('settingsModal').classList.add('show'); 
+}
+
+function closeSettings() { 
+    document.getElementById('settingsModal').classList.remove('show'); 
+}
+
+let tempDice = [];
+
+function pressNum(num) {
+    if (tempDice.length < 3) {
+        if (navigator.vibrate) navigator.vibrate(20);
+        tempDice.push(num);
+        
+        // PENTING: Panggil fungsi ini agar teks monitor terupdate
+        updateInputDisplay(); 
+        
+        // Beri teks status kecil di bawah monitor
+        document.getElementById('voiceStatus').innerText = "Mengetik...";
+    }
+    
+    if (tempDice.length === 3) {
+        document.getElementById('voiceStatus').innerText = "Memproses data...";
+        setTimeout(() => {
+            if (tempDice.length === 3) {
+                submitDice();
+                tempDice = []; 
+                updateInputDisplay(); // Reset tampilan monitor jadi _ _ _
+                document.getElementById('voiceStatus').innerText = "Selesai!";
+                setTimeout(() => { document.getElementById('voiceStatus').innerText = ""; }, 1000);
+            }
+        }, 500);
+    }
+}
+
+// Fungsi Hapus Satu Angka Terakhir
+function deleteLastNum() {
+    if (tempDice.length > 0) {
+        tempDice.pop();
+        updateInputDisplay();
+        if (navigator.vibrate) navigator.vibrate(30);
+    }
+}
+
+// Fungsi Reset Semua Input yang sedang diketik
+function resetNumpad() {
+    tempDice = [];
+    updateInputDisplay();
+    if (navigator.vibrate) navigator.vibrate([30, 30]);
+}
+
+// Fungsi Sinkronisasi ke Kotak Abu-abu
+function updateInputDisplay() {
+    const monitor = document.getElementById('digit-monitor');
+    if (!monitor) return;
+
+    if (tempDice.length === 0) {
+    monitor.innerText = isVoiceEnabled ? "SAY DICES..." : "READY TO INPUT";
+        monitor.style.color = "#5d606b";
+        monitor.style.letterSpacing = "1px"; 
+        monitor.style.fontSize = "1rem"; 
+    } else {
+        // Jika mulai diisi
+        let teksAngka = "";
+        for (let i = 0; i < 3; i++) {
+            teksAngka += (tempDice[i] ? tempDice[i] : "_") + " ";
+        }
+        monitor.innerText = teksAngka.trim();
+        
+        // Letter spacing 8px lebih aman untuk layar kecil dibanding 10px
+        monitor.style.letterSpacing = "8px"; 
+        monitor.style.fontSize = "1.8rem"; 
+
+        if (tempDice.length < 3) {
+            monitor.style.color = "var(--orange)";
+        } else {
+            monitor.style.color = "var(--green)";
+            
+            // Efek transisi setelah submit (tetap seperti aslinya)
+            setTimeout(() => {
+                monitor.innerText = "MENGOLAH DATA...";
+                monitor.style.fontSize = "0.9rem"; // Mengecil agar tetap dalam satu baris
+                monitor.style.letterSpacing = "1px";
+            }, 400);
+
+            setTimeout(() => {
+                monitor.innerText = "SELESAI!";
+                monitor.style.color = "var(--blue)";
+            }, 1000);
+        }
+    }
+
+    // Sinkronkan ke input asli (Penting untuk kalkulasi sistem)
+    if(document.getElementById('d1')) document.getElementById('d1').value = tempDice[0] || '';
+    if(document.getElementById('d2')) document.getElementById('d2').value = tempDice[1] || '';
+    if(document.getElementById('d3')) document.getElementById('d3').value = tempDice[2] || '';
+}
+
+</script>
+
+<div id="customAlert" class="modal" style="backdrop-filter: blur(8px); background: rgba(0,0,0,0.7);">
+    <div class="modal-content" style="text-align: center; border: 1px solid var(--purple); box-shadow: 0 0 30px rgba(157, 78, 221, 0.2);">
+        <div id="alertIcon" style="font-size: 3rem; margin-bottom: 10px;">🔔</div>
+        <h3 id="alertTitle" style="color: white; margin: 0 0 10px 0;">NOTIFIKASI</h3>
+        <p id="alertMessage" style="color: #787b86; line-height: 1.5; margin-bottom: 20px;"></p>
+        <div id="alertButtons" style="display: flex; gap: 10px;">
+            </div>
+    </div>
+</div>
+
+</body>
+                                                                                              </html>
